@@ -1,6 +1,6 @@
 ---
 title: "Structured Output"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

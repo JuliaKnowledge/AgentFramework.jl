@@ -1,6 +1,6 @@
 ---
 title: "Structured GraphRAG: From Tabular Data to Knowledge Graphs"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

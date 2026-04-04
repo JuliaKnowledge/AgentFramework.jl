@@ -1,5 +1,5 @@
 # Structured GraphRAG: From Tabular Data to Knowledge Graphs
-AgentFramework.jl
+Simon Frost
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)

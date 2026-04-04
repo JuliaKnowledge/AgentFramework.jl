@@ -1,6 +1,6 @@
 ---
 title: "Telemetry"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

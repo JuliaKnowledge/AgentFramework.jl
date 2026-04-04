@@ -1,6 +1,6 @@
 ---
 title: "Multi-Turn Conversations"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

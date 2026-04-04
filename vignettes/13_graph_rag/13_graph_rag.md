@@ -1,5 +1,5 @@
 # Graph RAG with RDFLib.jl
-AgentFramework.jl
+Simon Frost
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)

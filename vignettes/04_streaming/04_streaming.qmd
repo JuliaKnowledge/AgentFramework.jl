@@ -1,6 +1,6 @@
 ---
 title: "Streaming Responses"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

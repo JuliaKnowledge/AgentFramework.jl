@@ -1,6 +1,6 @@
 ---
 title: "Graph RAG with RDFLib.jl"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

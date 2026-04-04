@@ -1,6 +1,6 @@
 ---
 title: "Advanced Workflows"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false

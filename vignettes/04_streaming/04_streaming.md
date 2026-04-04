@@ -1,5 +1,5 @@
 # Streaming Responses
-AgentFramework.jl
+Simon Frost
 
 - [Overview](#overview)
 - [Prerequisites](#prerequisites)

@@ -1,6 +1,6 @@
 ---
 title: "Memory and Context Providers"
-author: "AgentFramework.jl"
+author: "Simon Frost"
 format:
   html:
     code-fold: false
