@@ -3,8 +3,8 @@ using Test
 
 # ── Test helpers ─────────────────────────────────────────────────────────────
 
-struct MockChatClient <: AbstractChatClient end
-AgentFramework.get_response(::MockChatClient, msgs, opts) =
+struct ResilienceMockChatClient <: AbstractChatClient end
+AgentFramework.get_response(::ResilienceMockChatClient, msgs, opts) =
     ChatResponse(messages=[Message(role=:assistant, contents=[text_content("mock")])])
 
 function make_failing_next(failures::Int, error=ChatClientError("timeout"))
@@ -168,14 +168,14 @@ end
     # ── Agent convenience functions ──────────────────────────────────────────
 
     @testset "with_retry! adds middleware" begin
-        agent = Agent(client=MockChatClient())
+        agent = Agent(client=ResilienceMockChatClient())
         @test isempty(agent.chat_middlewares)
         with_retry!(agent)
         @test length(agent.chat_middlewares) == 1
     end
 
     @testset "with_rate_limit! adds middleware at front" begin
-        agent = Agent(client=MockChatClient())
+        agent = Agent(client=ResilienceMockChatClient())
         # Add a dummy middleware first
         push!(agent.chat_middlewares, (ctx, next) -> next(ctx))
         rl = TokenBucketRateLimiter(requests_per_second=10.0, burst=5)
@@ -189,7 +189,7 @@ end
         rl = TokenBucketRateLimiter(requests_per_second=100.0, burst=10)
         cfg = RetryConfig(max_retries=2, initial_delay=0.001, jitter=0.0)
 
-        agent = Agent(client=MockChatClient())
+        agent = Agent(client=ResilienceMockChatClient())
         with_rate_limit!(agent, rl)
         with_retry!(agent, cfg)
         @test length(agent.chat_middlewares) == 2
