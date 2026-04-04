@@ -2,7 +2,7 @@
 
 AgentFramework.jl is an idiomatic Julia framework for building, orchestrating, and testing AI agents. It provides chat clients, tools, middleware, workflows, MCP integration, structured output, telemetry, and session storage in a Julia-first API.
 
-Planned repository: <https://github.com/JuliaKnowledge/AgentFramework.jl>
+Repository: <https://github.com/JuliaKnowledge/AgentFramework.jl>
 
 ## Installation
 
@@ -10,15 +10,15 @@ Until the package is registered:
 
 ```julia
 using Pkg
-Pkg.develop(path="path/to/AgentFramework.jl")
+Pkg.add(url="https://github.com/JuliaKnowledge/AgentFramework.jl")
 ```
 
 If you want the optional Azure OpenAI credential extension before registration, add AzureIdentity.jl separately:
 
 ```julia
 using Pkg
-Pkg.develop(path="path/to/AzureIdentity.jl")
-Pkg.develop(path="path/to/AgentFramework.jl")
+Pkg.add(url="https://github.com/JuliaKnowledge/AzureIdentity.jl")
+Pkg.add(url="https://github.com/JuliaKnowledge/AgentFramework.jl")
 ```
 
 After registration:
