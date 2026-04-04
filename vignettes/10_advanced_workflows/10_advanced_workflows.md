@@ -1,0 +1,400 @@
+# Advanced Workflows
+AgentFramework.jl
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Fan-Out: Broadcasting to Parallel
+  Executors](#fan-out-broadcasting-to-parallel-executors)
+- [Fan-In: Aggregating Parallel
+  Results](#fan-in-aggregating-parallel-results)
+- [Conditional Routing with
+  `add_switch`](#conditional-routing-with-add_switch)
+- [Shared State Between Executors](#shared-state-between-executors)
+- [Human-in-the-Loop with
+  `request_info`](#human-in-the-loop-with-request_info)
+- [Full Example: Text Analysis
+  Pipeline](#full-example-text-analysis-pipeline)
+- [Summary](#summary)
+
+## Overview
+
+This vignette demonstrates advanced workflow patterns: fan-out for
+parallel processing, fan-in for aggregation, conditional routing with
+`add_switch`, and shared state between executors. By the end you will
+know how to:
+
+1.  Broadcast one message to multiple executors with `add_fan_out`.
+2.  Merge results from parallel executors with `add_fan_in`.
+3.  Route messages conditionally with `add_switch`.
+4.  Share data across executors via `get_state` / `set_state!`.
+5.  Pause a workflow for human approval with `request_info`.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the
+`qwen3:8b` model pulled:
+
+``` bash
+ollama pull qwen3:8b
+```
+
+## Setup
+
+``` julia
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## Fan-Out: Broadcasting to Parallel Executors
+
+Fan-out sends a single message to multiple downstream executors for
+concurrent processing. Each executor receives a copy of the input.
+
+``` julia
+splitter = ExecutorSpec(
+    id = "splitter",
+    handler = (msg, ctx) -> send_message(ctx, msg),
+)
+
+worker_a = ExecutorSpec(
+    id = "worker_a",
+    handler = (msg, ctx) -> send_message(ctx, "A processed: $msg"),
+)
+
+worker_b = ExecutorSpec(
+    id = "worker_b",
+    handler = (msg, ctx) -> send_message(ctx, "B processed: $msg"),
+)
+
+collector = ExecutorSpec(
+    id = "collector",
+    handler = (msg, ctx) -> yield_output(ctx, msg),
+)
+```
+
+    ExecutorSpec("collector")
+
+We wire them using `add_fan_out` (one-to-many) and `add_fan_in`
+(many-to-one):
+
+``` julia
+fan_workflow = WorkflowBuilder(name = "FanOutDemo", start = splitter) |>
+    b -> add_executor(b, worker_a) |>
+    b -> add_executor(b, worker_b) |>
+    b -> add_executor(b, collector) |>
+    b -> add_fan_out(b, "splitter", ["worker_a", "worker_b"]) |>
+    b -> add_fan_in(b, ["worker_a", "worker_b"], "collector") |>
+    b -> add_output(b, "collector") |>
+    build
+```
+
+    ┌ Warning: Validation warning: Output executor 'collector' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+
+    Workflow("FanOutDemo", 4 executors, 2 edges)
+
+``` julia
+result = run_workflow(fan_workflow, "hello")
+outputs = get_outputs(result)
+for o in outputs
+    println(o)
+end
+```
+
+    A processed: hello
+    B processed: hello
+
+Both workers run concurrently within the same superstep, and the
+collector receives their results only after **all** fan-in sources have
+contributed.
+
+## Fan-In: Aggregating Parallel Results
+
+The `add_fan_in` edge group waits for every listed source to send at
+least one message before delivering the aggregated batch to the target.
+This guarantees the target executor sees a complete set of results.
+
+``` julia
+aggregator = ExecutorSpec(
+    id = "aggregator",
+    handler = (msg, ctx) -> begin
+        summary = "Aggregated: $msg"
+        yield_output(ctx, summary)
+    end,
+)
+```
+
+    ExecutorSpec("aggregator")
+
+The fan-in buffer is cleared per workflow run, so repeated
+`run_workflow` calls each start with a fresh buffer.
+
+## Conditional Routing with `add_switch`
+
+`add_switch` evaluates predicates against each outgoing message and
+routes to the first matching target — like a `switch` statement for data
+flow.
+
+``` julia
+classifier = ExecutorSpec(
+    id = "classifier",
+    handler = (msg, ctx) -> send_message(ctx, msg),
+)
+
+positive_handler = ExecutorSpec(
+    id = "positive",
+    handler = (msg, ctx) -> yield_output(ctx, "😊 Positive: $msg"),
+)
+
+negative_handler = ExecutorSpec(
+    id = "negative",
+    handler = (msg, ctx) -> yield_output(ctx, "😞 Negative: $msg"),
+)
+
+neutral_handler = ExecutorSpec(
+    id = "neutral",
+    handler = (msg, ctx) -> yield_output(ctx, "😐 Neutral: $msg"),
+)
+```
+
+    ExecutorSpec("neutral")
+
+``` julia
+switch_workflow = WorkflowBuilder(name = "SwitchDemo", start = classifier) |>
+    b -> add_executor(b, positive_handler) |>
+    b -> add_executor(b, negative_handler) |>
+    b -> add_executor(b, neutral_handler) |>
+    b -> add_switch(b, "classifier", [
+        (d -> occursin("good", lowercase(d))) => "positive",
+        (d -> occursin("bad", lowercase(d))) => "negative",
+    ]; default = "neutral") |>
+    b -> add_output(b, "positive") |>
+    b -> add_output(b, "negative") |>
+    b -> add_output(b, "neutral") |>
+    build
+```
+
+    ┌ Warning: Validation warning: Output executor 'positive' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+    ┌ Warning: Validation warning: Output executor 'negative' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+    ┌ Warning: Validation warning: Output executor 'neutral' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+
+    Workflow("SwitchDemo", 4 executors, 3 edges)
+
+``` julia
+for input in ["This is good news", "Bad weather ahead", "The sky is blue"]
+    r = run_workflow(switch_workflow, input)
+    println(first(get_outputs(r)))
+end
+```
+
+    😊 Positive: This is good news
+    😞 Negative: Bad weather ahead
+    😐 Neutral: The sky is blue
+
+## Shared State Between Executors
+
+Executors can share data through the workflow state dictionary using
+`set_state!` and `get_state` on the `WorkflowContext`. This avoids
+passing large payloads through messages.
+
+``` julia
+writer = ExecutorSpec(
+    id = "writer",
+    handler = (msg, ctx) -> begin
+        set_state!(ctx, "shared_data", uppercase(msg))
+        send_message(ctx, "done")
+    end,
+)
+
+reader = ExecutorSpec(
+    id = "reader",
+    handler = (msg, ctx) -> begin
+        data = get_state(ctx, "shared_data", "nothing")
+        yield_output(ctx, "Read from state: $data")
+    end,
+)
+
+state_workflow = WorkflowBuilder(name = "StateDemo", start = writer) |>
+    b -> add_executor(b, reader) |>
+    b -> add_edge(b, "writer", "reader") |>
+    b -> add_output(b, "reader") |>
+    build
+```
+
+    ┌ Warning: Validation warning: Output executor 'reader' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+
+    Workflow("StateDemo", 2 executors, 1 edges)
+
+``` julia
+result = run_workflow(state_workflow, "shared value")
+println(first(get_outputs(result)))
+```
+
+    Read from state: SHARED VALUE
+
+## Human-in-the-Loop with `request_info`
+
+The `request_info` function pauses the workflow and emits a
+`EVT_REQUEST_INFO` event. The caller provides responses via the
+`responses` keyword argument to resume execution.
+
+``` julia
+reviewer = ExecutorSpec(
+    id = "reviewer",
+    handler = (msg, ctx) -> begin
+        request_info(ctx, "Please approve: $msg")
+    end,
+)
+
+finalizer = ExecutorSpec(
+    id = "finalizer",
+    handler = (msg, ctx) -> yield_output(ctx, "Approved: $msg"),
+)
+```
+
+    ExecutorSpec("finalizer")
+
+``` julia
+hil_workflow = WorkflowBuilder(name = "HILDemo", start = reviewer) |>
+    b -> add_executor(b, finalizer) |>
+    b -> add_edge(b, "reviewer", "finalizer") |>
+    b -> add_output(b, "finalizer") |>
+    build
+```
+
+    ┌ Warning: Validation warning: Output executor 'finalizer' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+
+    Workflow("HILDemo", 2 executors, 1 edges)
+
+``` julia
+result1 = run_workflow(hil_workflow, "Deploy to production")
+println("State: ", get_final_state(result1))
+
+pending = get_request_info_events(result1)
+println("Pending requests: ", length(pending))
+```
+
+    State: WF_IDLE_WITH_PENDING_REQUESTS
+    Pending requests: 1
+
+Resume with a response:
+
+``` julia
+req_id = pending[1].request_id
+result2 = run_workflow(hil_workflow; responses = Dict{String,Any}(req_id => "yes"))
+println("Final state: ", get_final_state(result2))
+```
+
+    Final state: WF_IDLE_WITH_PENDING_REQUESTS
+
+## Full Example: Text Analysis Pipeline
+
+Combining all patterns into a realistic pipeline: split input text into
+three parallel analyzers (sentiment, keywords, summary), then merge
+results.
+
+``` julia
+client = OllamaChatClient(model = "qwen3:8b")
+
+dispatcher = ExecutorSpec(
+    id = "dispatcher",
+    handler = (msg, ctx) -> begin
+        set_state!(ctx, "original_text", msg)
+        send_message(ctx, msg)
+    end,
+)
+
+sentiment_analyzer = ExecutorSpec(
+    id = "sentiment",
+    handler = (msg, ctx) -> begin
+        agent = Agent(
+            name = "SentimentAnalyzer",
+            instructions = "Analyze the sentiment of the text. Reply with one word: Positive, Negative, or Neutral.",
+            client = client,
+        )
+        response = run_agent(agent, msg)
+        send_message(ctx, "Sentiment: $(response.text)")
+    end,
+)
+
+keyword_extractor = ExecutorSpec(
+    id = "keywords",
+    handler = (msg, ctx) -> begin
+        agent = Agent(
+            name = "KeywordExtractor",
+            instructions = "Extract 3-5 keywords from the text. Return them comma-separated.",
+            client = client,
+        )
+        response = run_agent(agent, msg)
+        send_message(ctx, "Keywords: $(response.text)")
+    end,
+)
+
+summarizer = ExecutorSpec(
+    id = "summary",
+    handler = (msg, ctx) -> begin
+        agent = Agent(
+            name = "Summarizer",
+            instructions = "Summarize the text in one sentence.",
+            client = client,
+        )
+        response = run_agent(agent, msg)
+        send_message(ctx, "Summary: $(response.text)")
+    end,
+)
+
+merger = ExecutorSpec(
+    id = "merger",
+    handler = (msg, ctx) -> begin
+        original = get_state(ctx, "original_text", "")
+        yield_output(ctx, "=== Analysis of: $(first(original, 50))... ===\n$msg")
+    end,
+)
+
+pipeline = WorkflowBuilder(name = "TextAnalysis", start = dispatcher) |>
+    b -> add_executor(b, sentiment_analyzer) |>
+    b -> add_executor(b, keyword_extractor) |>
+    b -> add_executor(b, summarizer) |>
+    b -> add_executor(b, merger) |>
+    b -> add_fan_out(b, "dispatcher", ["sentiment", "keywords", "summary"]) |>
+    b -> add_fan_in(b, ["sentiment", "keywords", "summary"], "merger") |>
+    b -> add_output(b, "merger") |>
+    build
+
+result = run_workflow(pipeline, """
+Julia is a high-level, high-performance programming language for technical computing.
+It combines the ease of Python with the speed of C, making it ideal for data science,
+machine learning, and scientific simulation.
+""")
+
+for output in get_outputs(result)
+    println(output)
+end
+```
+
+**Expected output:**
+
+    === Analysis of: Julia is a high-level, high-performance progr... ===
+    Sentiment: Positive
+    Keywords: Julia, programming, technical computing, data science, machine learning
+    Summary: Julia is a fast, high-level language designed for technical computing and data science.
+
+## Summary
+
+| Pattern | Builder Method | Use Case |
+|----|----|----|
+| Fan-out | `add_fan_out` | Parallel processing of same input |
+| Fan-in | `add_fan_in` | Aggregation barrier |
+| Switch | `add_switch` | Conditional routing |
+| Shared state | `set_state!` / `get_state` | Cross-executor data sharing |
+| Human-in-the-loop | `request_info` | Approval gates |
+
+Next, see [11 — Resilience](../11_resilience/11_resilience.qmd) to make
+your agents production-ready with retry and rate limiting.

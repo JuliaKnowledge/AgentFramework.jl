@@ -1,0 +1,823 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="AgentFramework.jl">
+
+<title>Resilience</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="11_resilience_files/libs/clipboard/clipboard.min.js"></script>
+<script src="11_resilience_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="11_resilience_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="11_resilience_files/libs/quarto-html/popper.min.js"></script>
+<script src="11_resilience_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="11_resilience_files/libs/quarto-html/anchor.min.js"></script>
+<link href="11_resilience_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="11_resilience_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="11_resilience_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="11_resilience_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="11_resilience_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+  <script src="https://cdnjs.cloudflare.com/polyfill/v3/polyfill.min.js?features=es6"></script>
+  <script defer="" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-chtml-full.js" type="text/javascript"></script>
+
+<script type="text/javascript">
+const typesetMath = (el) => {
+  if (window.MathJax) {
+    // MathJax Typeset
+    window.MathJax.typeset([el]);
+  } else if (window.katex) {
+    // KaTeX Render
+    var mathElements = el.getElementsByClassName("math");
+    var macros = [];
+    for (var i = 0; i < mathElements.length; i++) {
+      var texText = mathElements[i].firstChild;
+      if (mathElements[i].tagName == "SPAN" && texText && texText.data) {
+        window.katex.render(texText.data, mathElements[i], {
+          displayMode: mathElements[i].classList.contains('display'),
+          throwOnError: false,
+          macros: macros,
+          fleqn: false
+        });
+      }
+    }
+  }
+}
+window.Quarto = {
+  typesetMath
+};
+</script>
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#why-resilience" id="toc-why-resilience" class="nav-link" data-scroll-target="#why-resilience">Why Resilience?</a></li>
+  <li><a href="#retry-configuration" id="toc-retry-configuration" class="nav-link" data-scroll-target="#retry-configuration">Retry Configuration</a></li>
+  <li><a href="#creating-retry-middleware" id="toc-creating-retry-middleware" class="nav-link" data-scroll-target="#creating-retry-middleware">Creating Retry Middleware</a></li>
+  <li><a href="#convenience-with_retry" id="toc-convenience-with_retry" class="nav-link" data-scroll-target="#convenience-with_retry">Convenience: <code>with_retry!</code></a></li>
+  <li><a href="#token-bucket-rate-limiting" id="toc-token-bucket-rate-limiting" class="nav-link" data-scroll-target="#token-bucket-rate-limiting">Token Bucket Rate Limiting</a></li>
+  <li><a href="#rate-limit-middleware" id="toc-rate-limit-middleware" class="nav-link" data-scroll-target="#rate-limit-middleware">Rate Limit Middleware</a></li>
+  <li><a href="#composing-both-middlewares" id="toc-composing-both-middlewares" class="nav-link" data-scroll-target="#composing-both-middlewares">Composing Both Middlewares</a></li>
+  <li><a href="#running-with-resilience" id="toc-running-with-resilience" class="nav-link" data-scroll-target="#running-with-resilience">Running with Resilience</a></li>
+  <li><a href="#which-errors-are-retryable" id="toc-which-errors-are-retryable" class="nav-link" data-scroll-target="#which-errors-are-retryable">Which Errors Are Retryable?</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="11_resilience.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="11_resilience.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Resilience</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>AgentFramework.jl </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>LLM APIs are inherently unreliable: rate limits, transient errors, and network hiccups are facts of life. This vignette shows how to make your agents production-grade using retry middleware and token-bucket rate limiting. By the end you will know how to:</p>
+<ol type="1">
+<li>Configure <code>RetryConfig</code> with exponential backoff and jitter.</li>
+<li>Create <code>retry_chat_middleware</code> and add it to an agent.</li>
+<li>Use the convenience <code>with_retry!</code> helper.</li>
+<li>Build a <code>TokenBucketRateLimiter</code> for API quota management.</li>
+<li>Add <code>rate_limit_chat_middleware</code> to an agent.</li>
+<li>Use the convenience <code>with_rate_limit!</code> helper.</li>
+<li>Compose both middlewares on the same agent.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="why-resilience" class="level2">
+<h2 class="anchored" data-anchor-id="why-resilience">Why Resilience?</h2>
+<p>When calling LLM APIs in production you will encounter:</p>
+<ul>
+<li><strong>Rate limits</strong> (HTTP 429) — the provider throttles your requests.</li>
+<li><strong>Transient failures</strong> (HTTP 500, 502, 503, 504) — temporary server issues.</li>
+<li><strong>Timeouts</strong> — network or processing delays.</li>
+</ul>
+<p>Without resilience middleware, any of these cause your agent to fail immediately. With retry + rate limiting, your agent gracefully handles these situations.</p>
+</section>
+<section id="retry-configuration" class="level2">
+<h2 class="anchored" data-anchor-id="retry-configuration">Retry Configuration</h2>
+<p><code>RetryConfig</code> controls exponential backoff behaviour:</p>
+<div id="4" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">RetryConfig</span>(</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    max_retries <span class="op">=</span> <span class="fl">3</span>,          <span class="co"># up to 3 retry attempts</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    initial_delay <span class="op">=</span> <span class="fl">1.0</span>,      <span class="co"># 1 second before first retry</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    max_delay <span class="op">=</span> <span class="fl">60.0</span>,         <span class="co"># cap backoff at 60 seconds</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    multiplier <span class="op">=</span> <span class="fl">2.0</span>,         <span class="co"># double the delay each attempt</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>    jitter <span class="op">=</span> <span class="fl">0.1</span>,             <span class="co"># ±10% random jitter</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>RetryConfig(3, 1.0, 60.0, 2.0, 0.1, Type[HTTP.Exceptions.StatusError], [429, 500, 502, 503, 504])</code></pre>
+</div>
+</div>
+<p>The delay for attempt <code>n</code> is computed as:</p>
+<p><span class="math display">\[\text{delay} = \min(\text{initial\_delay} \times \text{multiplier}^n, \text{max\_delay}) \pm \text{jitter}\]</span></p>
+<p>Jitter prevents the “thundering herd” problem where many clients retry at the exact same time.</p>
+</section>
+<section id="creating-retry-middleware" class="level2">
+<h2 class="anchored" data-anchor-id="creating-retry-middleware">Creating Retry Middleware</h2>
+<p>The <code>retry_chat_middleware</code> function returns a middleware closure that wraps every LLM call with retry logic:</p>
+<div id="6" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>middleware <span class="op">=</span> <span class="fu">retry_chat_middleware</span>(config)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>#retry_chat_middleware##0 (generic function with 1 method)</code></pre>
+</div>
+</div>
+<p>You can add it directly to an agent’s middleware pipeline:</p>
+<div id="8" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"ResilientAgent"</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful assistant."</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">push!</span>(agent.chat_middlewares, middleware)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="convenience-with_retry" class="level2">
+<h2 class="anchored" data-anchor-id="convenience-with_retry">Convenience: <code>with_retry!</code></h2>
+<p>The <code>with_retry!</code> helper does the same thing in a single call. It pushes the retry middleware onto the agent’s chat pipeline and returns the agent for chaining:</p>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"ResilientAgent"</span>,</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful assistant."</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="fu">with_retry!</span>(agent, <span class="fu">RetryConfig</span>(max_retries <span class="op">=</span> <span class="fl">5</span>, initial_delay <span class="op">=</span> <span class="fl">0.5</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="token-bucket-rate-limiting" class="level2">
+<h2 class="anchored" data-anchor-id="token-bucket-rate-limiting">Token Bucket Rate Limiting</h2>
+<p>The <code>TokenBucketRateLimiter</code> implements a classic token bucket algorithm for controlling request throughput:</p>
+<div id="12" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>limiter <span class="op">=</span> <span class="fu">TokenBucketRateLimiter</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    requests_per_second <span class="op">=</span> <span class="fl">10.0</span>,   <span class="co"># sustained throughput</span></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    burst <span class="op">=</span> <span class="fl">10</span>,                    <span class="co"># burst allowance</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>TokenBucketRateLimiter(10.0, 10.0, 10.0, 1.773613240347142e9, ReentrantLock())</code></pre>
+</div>
+</div>
+<p>The bucket refills at <code>requests_per_second</code> and holds at most <code>burst</code> tokens. Each LLM call consumes one token. If no token is available, the middleware blocks until one becomes available (up to a configurable timeout).</p>
+<div id="14" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>acquired <span class="op">=</span> <span class="fu">acquire!</span>(limiter; timeout <span class="op">=</span> <span class="fl">5.0</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Token acquired: </span><span class="sc">$</span>acquired<span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Token acquired: true</code></pre>
+</div>
+</div>
+</section>
+<section id="rate-limit-middleware" class="level2">
+<h2 class="anchored" data-anchor-id="rate-limit-middleware">Rate Limit Middleware</h2>
+<p>Create rate-limiting middleware from a limiter:</p>
+<div id="16" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>rl_middleware <span class="op">=</span> <span class="fu">rate_limit_chat_middleware</span>(limiter; timeout <span class="op">=</span> <span class="fl">30.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>#93 (generic function with 1 method)</code></pre>
+</div>
+</div>
+<p>Or use the convenience helper which inserts it at the <strong>front</strong> of the pipeline (so rate limiting is checked before any other middleware):</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="fu">with_rate_limit!</span>(agent, limiter; timeout <span class="op">=</span> <span class="fl">30.0</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="composing-both-middlewares" class="level2">
+<h2 class="anchored" data-anchor-id="composing-both-middlewares">Composing Both Middlewares</h2>
+<p>For production use, combine retry and rate limiting on the same agent. Rate limiting goes first (front of pipeline) so we don’t waste retries on rate-limited requests:</p>
+<div id="20" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"ProductionAgent"</span>,</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a production-grade assistant."</span>,</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Add retry first (appends to end)</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a><span class="fu">with_retry!</span>(agent, <span class="fu">RetryConfig</span>(</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>    max_retries <span class="op">=</span> <span class="fl">3</span>,</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>    initial_delay <span class="op">=</span> <span class="fl">1.0</span>,</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    multiplier <span class="op">=</span> <span class="fl">2.0</span>,</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>))</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-16"><a href="#cb16-16" aria-hidden="true" tabindex="-1"></a><span class="co"># Add rate limiting (prepends to front)</span></span>
+<span id="cb16-17"><a href="#cb16-17" aria-hidden="true" tabindex="-1"></a>limiter <span class="op">=</span> <span class="fu">TokenBucketRateLimiter</span>(requests_per_second <span class="op">=</span> <span class="fl">5.0</span>, burst <span class="op">=</span> <span class="fl">10</span>)</span>
+<span id="cb16-18"><a href="#cb16-18" aria-hidden="true" tabindex="-1"></a><span class="fu">with_rate_limit!</span>(agent, limiter)</span>
+<span id="cb16-19"><a href="#cb16-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-20"><a href="#cb16-20" aria-hidden="true" tabindex="-1"></a><span class="co"># The middleware pipeline is now: rate_limit → retry → LLM call</span></span>
+<span id="cb16-21"><a href="#cb16-21" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Middlewares: "</span>, <span class="fu">length</span>(agent.chat_middlewares))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Middlewares: 2</code></pre>
+</section>
+<section id="running-with-resilience" class="level2">
+<h2 class="anchored" data-anchor-id="running-with-resilience">Running with Resilience</h2>
+<div id="22" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"What is the speed of light?"</span>)</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>The speed of light in a vacuum is approximately 299,792,458 meters per second.</code></pre>
+<p>If the LLM returns a transient error, the retry middleware will automatically retry up to 3 times with exponential backoff. The rate limiter ensures we don’t exceed 5 requests per second.</p>
+</section>
+<section id="which-errors-are-retryable" class="level2">
+<h2 class="anchored" data-anchor-id="which-errors-are-retryable">Which Errors Are Retryable?</h2>
+<p>The <code>RetryConfig</code> decides which errors to retry based on:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Check</th>
+<th>Retryable?</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>HTTP 429 (Too Many Requests)</td>
+<td>✅ Yes</td>
+</tr>
+<tr class="even">
+<td>HTTP 500, 502, 503, 504</td>
+<td>✅ Yes</td>
+</tr>
+<tr class="odd">
+<td>Connection timeout</td>
+<td>✅ Yes</td>
+</tr>
+<tr class="even">
+<td><code>ChatClientError</code> with “rate limit”</td>
+<td>✅ Yes</td>
+</tr>
+<tr class="odd">
+<td>HTTP 400 (Bad Request)</td>
+<td>❌ No</td>
+</tr>
+<tr class="even">
+<td>HTTP 401 (Unauthorized)</td>
+<td>❌ No</td>
+</tr>
+<tr class="odd">
+<td>Validation errors</td>
+<td>❌ No</td>
+</tr>
+</tbody>
+</table>
+<p>Non-retryable errors are raised immediately without consuming retry attempts.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 39%">
+<col style="width: 32%">
+<col style="width: 28%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Purpose</th>
+<th>Method</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>RetryConfig</code></td>
+<td>Backoff parameters</td>
+<td><code>RetryConfig(...)</code></td>
+</tr>
+<tr class="even">
+<td><code>retry_chat_middleware</code></td>
+<td>Wrap calls with retry</td>
+<td>Manual pipeline</td>
+</tr>
+<tr class="odd">
+<td><code>with_retry!</code></td>
+<td>One-liner retry setup</td>
+<td>Convenience</td>
+</tr>
+<tr class="even">
+<td><code>TokenBucketRateLimiter</code></td>
+<td>Throttle requests</td>
+<td><code>TokenBucketRateLimiter(...)</code></td>
+</tr>
+<tr class="odd">
+<td><code>rate_limit_chat_middleware</code></td>
+<td>Wrap calls with rate limit</td>
+<td>Manual pipeline</td>
+</tr>
+<tr class="even">
+<td><code>with_rate_limit!</code></td>
+<td>One-liner rate limit setup</td>
+<td>Convenience</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Tip:</strong> Always add rate limiting <em>before</em> retry in the pipeline so you don’t burn retries on rate-limited requests.</p>
+<p>Next, see <a href="../12_telemetry/12_telemetry.qmd">12 — Telemetry</a> to add observability and tracing to your agents.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

@@ -1,0 +1,240 @@
+# Streaming Responses
+AgentFramework.jl
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Creating the Agent](#creating-the-agent)
+- [Why Streaming Matters](#why-streaming-matters)
+- [Streaming Token by Token](#streaming-token-by-token)
+- [Understanding
+  AgentResponseUpdate](#understanding-agentresponseupdate)
+- [Getting the Final Response](#getting-the-final-response)
+- [Streaming vs Non-Streaming
+  Comparison](#streaming-vs-non-streaming-comparison)
+- [Collecting Tokens into a String](#collecting-tokens-into-a-string)
+- [Summary](#summary)
+
+## Overview
+
+When an LLM generates a long response, waiting for the entire answer
+before displaying anything feels sluggish. **Streaming** delivers tokens
+as they are produced, giving the user immediate feedback and
+dramatically reducing perceived latency.
+
+In this vignette you will learn how to:
+
+1.  Use `run_agent_streaming` to get a `ResponseStream`.
+2.  Iterate over `AgentResponseUpdate` objects to display text in real
+    time.
+3.  Call `get_text` on each update to extract the token fragment.
+4.  Retrieve the complete `AgentResponse` with `get_final_response`.
+5.  Compare the streaming and non-streaming APIs.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the
+`qwen3:8b` model pulled:
+
+``` bash
+ollama pull qwen3:8b
+```
+
+## Setup
+
+``` julia
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## Creating the Agent
+
+We start with the same `OllamaChatClient` and `Agent` used in previous
+vignettes — nothing special is required for streaming support:
+
+``` julia
+client = OllamaChatClient(model = "qwen3:8b")
+
+agent = Agent(
+    name = "StreamingAgent",
+    instructions = "You are a helpful assistant. Provide detailed answers.",
+    client = client,
+)
+```
+
+    Agent("StreamingAgent", 0 tools)
+
+## Why Streaming Matters
+
+Consider two user experiences:
+
+| Approach | Time to first token | Perceived speed |
+|----|----|----|
+| Non-streaming (`run_agent`) | Seconds (full generation) | Slow |
+| Streaming (`run_agent_streaming`) | Milliseconds | Fast |
+
+Streaming is especially valuable for long answers, chain-of-thought
+reasoning, or interactive applications where users want to read along as
+the model thinks.
+
+## Streaming Token by Token
+
+`run_agent_streaming` returns a `ResponseStream{AgentResponseUpdate}`.
+You iterate over it with a standard `for` loop — each iteration yields
+one update containing a small fragment of text:
+
+``` julia
+stream = run_agent_streaming(agent, "Explain the water cycle in three paragraphs.")
+
+for update in stream
+    text = get_text(update)
+    print(text)  # no newline — tokens arrive as fragments
+end
+println()  # final newline
+```
+
+**Expected output** (tokens arrive incrementally):
+
+    The water cycle, also known as the hydrological cycle, describes the continuous
+    movement of water on, above, and below the surface of the Earth...
+
+    Evaporation is the primary driver of the water cycle. When the sun heats
+    bodies of water...
+
+    Precipitation occurs when water vapor in the atmosphere condenses...
+
+## Understanding AgentResponseUpdate
+
+Each `AgentResponseUpdate` carries a small piece of the response. Its
+key fields are:
+
+- **`contents`** — A vector of `Content` items (usually one text
+  fragment).
+- **`role`** — Set to `:assistant` on the first update, `nothing`
+  afterwards.
+- **`finish_reason`** — `nothing` until the final update, then `STOP`.
+- **`model_id`** — The model name (usually present on every update).
+- **`usage_details`** — Token counts (typically only on the last
+  update).
+
+You will usually call `get_text(update)` rather than inspecting
+`contents` directly:
+
+``` julia
+stream = run_agent_streaming(agent, "What is 2 + 2?")
+
+for update in stream
+    text = get_text(update)
+    if !isempty(text)
+        println("Fragment: ", repr(text))
+    end
+    if update.finish_reason !== nothing
+        println("Finished: ", update.finish_reason)
+    end
+end
+```
+
+**Expected output:**
+
+    Fragment: "The"
+    Fragment: " answer"
+    Fragment: " is"
+    Fragment: " 4"
+    Fragment: "."
+    Finished: STOP
+
+## Getting the Final Response
+
+After the stream is fully consumed, call `get_final_response` to obtain
+the assembled `AgentResponse` — identical to what `run_agent` would have
+returned:
+
+``` julia
+stream = run_agent_streaming(agent, "Name three oceans.")
+
+# Consume the stream (printing tokens)
+for update in stream
+    print(get_text(update))
+end
+println()
+
+# Now retrieve the complete response
+response = get_final_response(stream)
+println("Complete text: ", response.text)
+println("Model: ", response.model_id)
+println("Finish reason: ", response.finish_reason)
+```
+
+**Expected output:**
+
+    The three largest oceans are the Pacific, Atlantic, and Indian oceans.
+    Complete text: The three largest oceans are the Pacific, Atlantic, and Indian oceans.
+    Model: qwen3:8b
+    Finish reason: STOP
+
+## Streaming vs Non-Streaming Comparison
+
+The two APIs are interchangeable — they produce the same final result.
+Choose based on your UX needs:
+
+``` julia
+# Non-streaming: blocks until the full response is ready
+response = run_agent(agent, "What is the speed of light?")
+println("Non-streaming: ", response.text)
+
+# Streaming: tokens arrive in real time
+print("Streaming: ")
+stream = run_agent_streaming(agent, "What is the speed of light?")
+for update in stream
+    print(get_text(update))
+end
+println()
+```
+
+**Expected output:**
+
+    Non-streaming: The speed of light in a vacuum is approximately 299,792,458 metres per second.
+    Streaming: The speed of light in a vacuum is approximately 299,792,458 metres per second.
+
+## Collecting Tokens into a String
+
+If you need both real-time display and a final string, accumulate tokens
+in an `IOBuffer`:
+
+``` julia
+stream = run_agent_streaming(agent, "Define photosynthesis in one sentence.")
+
+buf = IOBuffer()
+for update in stream
+    text = get_text(update)
+    print(text)          # live output
+    write(buf, text)     # accumulate
+end
+println()
+
+full_text = String(take!(buf))
+println("Collected $(length(full_text)) characters")
+```
+
+**Expected output:**
+
+    Photosynthesis is the process by which green plants convert sunlight, water, and carbon dioxide into glucose and oxygen.
+    Collected 117 characters
+
+## Summary
+
+| Function | Returns | Use case |
+|----|----|----|
+| `run_agent(agent, input)` | `AgentResponse` | Simple request-response |
+| `run_agent_streaming(agent, input)` | `ResponseStream{AgentResponseUpdate}` | Real-time token display |
+| `get_text(update)` | `String` | Extract text from one update |
+| `get_final_response(stream)` | `AgentResponse` | Complete response after streaming |
+
+Streaming does not change the agent’s behaviour — tools, middleware, and
+sessions all work the same way. It only changes *when* you see the
+output.
+
+Next, see [05 — Structured
+Output](../05_structured_output/05_structured_output.qmd) to get typed
+Julia structs back from the LLM.

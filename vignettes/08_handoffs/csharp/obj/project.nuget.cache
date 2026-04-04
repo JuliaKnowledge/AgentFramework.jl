@@ -1,0 +1,29 @@
+{
+  "version": 2,
+  "dgSpecHash": "rEZ/QJQaXd0=",
+  "success": true,
+  "projectFilePath": "/Users/sdwfrost/Projects/agent-framework/AgentFramework.jl/vignettes/08_handoffs/csharp/08_handoffs.csproj",
+  "expectedPackageFiles": [
+    "/Users/sdwfrost/.nuget/packages/google.protobuf/3.30.2/google.protobuf.3.30.2.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.ai/10.3.0/microsoft.extensions.ai.10.3.0.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.ai.abstractions/10.3.0/microsoft.extensions.ai.abstractions.10.3.0.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.caching.abstractions/10.0.3/microsoft.extensions.caching.abstractions.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.dependencyinjection.abstractions/10.0.3/microsoft.extensions.dependencyinjection.abstractions.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.logging.abstractions/10.0.3/microsoft.extensions.logging.abstractions.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.primitives/10.0.3/microsoft.extensions.primitives.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.extensions.vectordata.abstractions/9.7.0/microsoft.extensions.vectordata.abstractions.9.7.0.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.ml.tokenizers/2.0.0/microsoft.ml.tokenizers.2.0.0.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/ollamasharp/5.4.8/ollamasharp.5.4.8.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/opentelemetry.api/1.13.1/opentelemetry.api.1.13.1.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/system.diagnostics.diagnosticsource/10.0.3/system.diagnostics.diagnosticsource.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/system.io.pipelines/10.0.3/system.io.pipelines.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/system.numerics.tensors/10.0.3/system.numerics.tensors.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/system.text.encodings.web/10.0.3/system.text.encodings.web.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/system.text.json/10.0.3/system.text.json.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/system.threading.channels/10.0.3/system.threading.channels.10.0.3.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.netcore.app.ref/8.0.25/microsoft.netcore.app.ref.8.0.25.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.aspnetcore.app.ref/8.0.25/microsoft.aspnetcore.app.ref.8.0.25.nupkg.sha512",
+    "/Users/sdwfrost/.nuget/packages/microsoft.netcore.app.host.osx-arm64/8.0.25/microsoft.netcore.app.host.osx-arm64.8.0.25.nupkg.sha512"
+  ],
+  "logs": []
+}

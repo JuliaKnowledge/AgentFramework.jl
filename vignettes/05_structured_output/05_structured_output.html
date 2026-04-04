@@ -1,0 +1,904 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="AgentFramework.jl">
+
+<title>Structured Output</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="05_structured_output_files/libs/clipboard/clipboard.min.js"></script>
+<script src="05_structured_output_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="05_structured_output_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="05_structured_output_files/libs/quarto-html/popper.min.js"></script>
+<script src="05_structured_output_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="05_structured_output_files/libs/quarto-html/anchor.min.js"></script>
+<link href="05_structured_output_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="05_structured_output_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="05_structured_output_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="05_structured_output_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="05_structured_output_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#why-structured-output" id="toc-why-structured-output" class="nav-link" data-scroll-target="#why-structured-output">Why Structured Output?</a></li>
+  <li><a href="#defining-a-response-type" id="toc-defining-a-response-type" class="nav-link" data-scroll-target="#defining-a-response-type">Defining a Response Type</a></li>
+  <li><a href="#inspecting-the-schema" id="toc-inspecting-the-schema" class="nav-link" data-scroll-target="#inspecting-the-schema">Inspecting the Schema</a></li>
+  <li><a href="#creating-the-agent" id="toc-creating-the-agent" class="nav-link" data-scroll-target="#creating-the-agent">Creating the Agent</a></li>
+  <li><a href="#typed-agent-run" id="toc-typed-agent-run" class="nav-link" data-scroll-target="#typed-agent-run">Typed Agent Run</a></li>
+  <li><a href="#accessing-the-raw-json" id="toc-accessing-the-raw-json" class="nav-link" data-scroll-target="#accessing-the-raw-json">Accessing the Raw JSON</a></li>
+  <li><a href="#nested-types" id="toc-nested-types" class="nav-link" data-scroll-target="#nested-types">Nested Types</a></li>
+  <li><a href="#manual-approach-response_format_for-and-parse_structured" id="toc-manual-approach-response_format_for-and-parse_structured" class="nav-link" data-scroll-target="#manual-approach-response_format_for-and-parse_structured">Manual Approach: response_format_for and parse_structured</a></li>
+  <li><a href="#optional-fields" id="toc-optional-fields" class="nav-link" data-scroll-target="#optional-fields">Optional Fields</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="05_structured_output.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="05_structured_output.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Structured Output</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>AgentFramework.jl </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>By default, LLMs return free-form text. <strong>Structured output</strong> constrains the model to return valid JSON conforming to a schema you define, giving you typed Julia structs instead of strings you have to parse.</p>
+<p>In this vignette you will learn how to:</p>
+<ol type="1">
+<li>Define a <code>@kwdef</code> struct as your response type.</li>
+<li>Use <code>schema_from_type(T)</code> to inspect the generated JSON Schema.</li>
+<li>Call <code>run_agent(Type, agent, input)</code> for automatic typed responses.</li>
+<li>Access fields on the returned <code>StructuredOutput{T}</code>.</li>
+<li>Use the lower-level <code>response_format_for</code> and <code>parse_structured</code> API.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>Structured output requires the model to support JSON mode or guided generation. Most modern models (Qwen, Llama 3, Gemma) work well with this feature via Ollama.</p>
+</div>
+</div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="why-structured-output" class="level2">
+<h2 class="anchored" data-anchor-id="why-structured-output">Why Structured Output?</h2>
+<p>Consider asking an LLM to review a movie. The free-text answer might say <em>“I’d give it 8 out of 10”</em> or <em>“Rating: 8/10”</em> — but extracting the numeric rating requires fragile regex or string parsing. Structured output solves this by asking the model to return JSON that maps directly to your Julia type.</p>
+</section>
+<section id="defining-a-response-type" class="level2">
+<h2 class="anchored" data-anchor-id="defining-a-response-type">Defining a Response Type</h2>
+<p>Use <code>@kwdef</code> to define a struct whose fields describe the shape of the response you want:</p>
+<div id="4" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="bu">Base</span>.<span class="pp">@kwdef</span> <span class="kw">struct</span> MovieReview</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>    title<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>    rating<span class="op">::</span><span class="dt">Int</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    summary<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    recommended<span class="op">::</span><span class="dt">Bool</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>MovieReview</code></pre>
+</div>
+</div>
+<p>Each field name becomes a JSON property. The type mapping is:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Julia type</th>
+<th>JSON Schema type</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>String</code></td>
+<td><code>"string"</code></td>
+</tr>
+<tr class="even">
+<td><code>Int</code></td>
+<td><code>"integer"</code></td>
+</tr>
+<tr class="odd">
+<td><code>Float64</code></td>
+<td><code>"number"</code></td>
+</tr>
+<tr class="even">
+<td><code>Bool</code></td>
+<td><code>"boolean"</code></td>
+</tr>
+<tr class="odd">
+<td><code>Vector{T}</code></td>
+<td><code>"array"</code></td>
+</tr>
+<tr class="even">
+<td><code>Union{Nothing, T}</code></td>
+<td>optional field</td>
+</tr>
+<tr class="odd">
+<td>Nested struct</td>
+<td>nested <code>"object"</code></td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="inspecting-the-schema" class="level2">
+<h2 class="anchored" data-anchor-id="inspecting-the-schema">Inspecting the Schema</h2>
+<p><code>schema_from_type</code> generates the JSON Schema that will be sent to the model:</p>
+<div id="6" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">JSON3</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>schema <span class="op">=</span> AgentFramework.<span class="fu">schema_from_type</span>(MovieReview)</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(JSON3.<span class="fu">pretty</span>(JSON3.<span class="fu">write</span>(schema)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{
+    "properties": {
+        "summary": {
+            "type": "string"
+        },
+        "recommended": {
+            "type": "boolean"
+        },
+        "rating": {
+            "type": "integer"
+        },
+        "title": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "title",
+        "rating",
+        "summary",
+        "recommended"
+    ],
+    "type": "object"
+}nothing</code></pre>
+</div>
+</div>
+<p>This produces a schema with <code>"type": "object"</code>, the four properties, and a <code>"required"</code> array listing all non-optional fields.</p>
+</section>
+<section id="creating-the-agent" class="level2">
+<h2 class="anchored" data-anchor-id="creating-the-agent">Creating the Agent</h2>
+<div id="8" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"MovieCritic"</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a movie critic. Return structured reviews when asked."</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>Agent("MovieCritic", 0 tools)</code></pre>
+</div>
+</div>
+</section>
+<section id="typed-agent-run" class="level2">
+<h2 class="anchored" data-anchor-id="typed-agent-run">Typed Agent Run</h2>
+<p>The simplest way to get structured output is the typed overload of <code>run_agent</code>. Pass the struct type as the first argument:</p>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> <span class="fu">run_agent</span>(MovieReview, agent, <span class="st">"Review the movie 'Inception' (2010)."</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">typeof</span>(result))          <span class="co"># StructuredOutput{MovieReview}</span></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.title)      <span class="co"># Inception</span></span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.rating)     <span class="co"># 9</span></span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.summary)    <span class="co"># A mind-bending sci-fi thriller...</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.recommended)  <span class="co"># true</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>StructuredOutput{MovieReview}
+Inception
+9
+A mind-bending sci-fi thriller about dreams within dreams, featuring stunning visuals and a thought-provoking narrative.
+true</code></pre>
+<p>The <code>StructuredOutput{T}</code> wrapper holds:</p>
+<ul>
+<li><strong><code>value::T</code></strong> — The parsed struct with all fields populated.</li>
+<li><strong><code>raw_text::String</code></strong> — The raw JSON string returned by the model.</li>
+</ul>
+</section>
+<section id="accessing-the-raw-json" class="level2">
+<h2 class="anchored" data-anchor-id="accessing-the-raw-json">Accessing the Raw JSON</h2>
+<p>Sometimes you want to see exactly what the model returned before parsing:</p>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Raw JSON:"</span>)</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.raw_text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Raw JSON:
+{"title":"Inception","rating":9,"summary":"A mind-bending sci-fi thriller about dreams within dreams, featuring stunning visuals and a thought-provoking narrative.","recommended":true}</code></pre>
+</section>
+<section id="nested-types" class="level2">
+<h2 class="anchored" data-anchor-id="nested-types">Nested Types</h2>
+<p>Structured output supports nested structs. For example, a book review with a nested author type:</p>
+<div id="14" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="bu">Base</span>.<span class="pp">@kwdef</span> <span class="kw">struct</span> Author</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    name<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    nationality<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="bu">Base</span>.<span class="pp">@kwdef</span> <span class="kw">struct</span> BookReview</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    title<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    author<span class="op">::</span><span class="dt">Author</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    rating<span class="op">::</span><span class="dt">Int</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    themes<span class="op">::</span><span class="dt">Vector{String}</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a>schema <span class="op">=</span> AgentFramework.<span class="fu">schema_from_type</span>(BookReview)</span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(JSON3.<span class="fu">pretty</span>(JSON3.<span class="fu">write</span>(schema)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{
+    "properties": {
+        "themes": {
+            "items": {
+                "type": "string"
+            },
+            "type": "array"
+        },
+        "author": {
+            "properties": {
+                "name": {
+                    "type": "string"
+                },
+                "nationality": {
+                    "type": "string"
+                }
+            },
+            "required": [
+                "name",
+                "nationality"
+            ],
+            "type": "object"
+        },
+        "rating": {
+            "type": "integer"
+        },
+        "title": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "title",
+        "author",
+        "rating",
+        "themes"
+    ],
+    "type": "object"
+}nothing</code></pre>
+</div>
+</div>
+<div id="16" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> <span class="fu">run_agent</span>(BookReview, agent,</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Review '1984' by George Orwell."</span>)</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.title)              <span class="co"># 1984</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.author.name)        <span class="co"># George Orwell</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.author.nationality) <span class="co"># British</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(result.value.themes)             <span class="co"># ["Totalitarianism", "Surveillance", ...]</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>1984
+George Orwell
+British
+["Totalitarianism", "Surveillance", "Censorship"]</code></pre>
+</section>
+<section id="manual-approach-response_format_for-and-parse_structured" class="level2">
+<h2 class="anchored" data-anchor-id="manual-approach-response_format_for-and-parse_structured">Manual Approach: response_format_for and parse_structured</h2>
+<p>Under the hood, the typed <code>run_agent</code> does two things:</p>
+<ol type="1">
+<li>Sets <code>response_format</code> in <code>ChatOptions</code> via <code>response_format_for(T)</code>.</li>
+<li>Parses the response with <code>parse_structured(T, response)</code>.</li>
+</ol>
+<p>You can do this manually for more control:</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Build options with the response format</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>rf <span class="op">=</span> AgentFramework.<span class="fu">response_format_for</span>(MovieReview)</span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>opts <span class="op">=</span> <span class="fu">ChatOptions</span>(response_format <span class="op">=</span> rf)</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Run the agent with those options</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"Review 'The Shawshank Redemption'."</span>; options <span class="op">=</span> opts)</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Raw text: "</span>, response.text)</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: Parse the response into the struct</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> AgentFramework.<span class="fu">parse_structured</span>(MovieReview, response)</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Title: "</span>, result.value.title)</span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Rating: "</span>, result.value.rating)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Raw text: {"title":"The Shawshank Redemption","rating":10,"summary":"A powerful drama about hope and resilience in the face of injustice.","recommended":true}
+Title: The Shawshank Redemption
+Rating: 10</code></pre>
+</section>
+<section id="optional-fields" class="level2">
+<h2 class="anchored" data-anchor-id="optional-fields">Optional Fields</h2>
+<p>Use <code>Union{Nothing, T}</code> for fields that may be absent. These are omitted from the JSON Schema <code>"required"</code> array:</p>
+<div id="20" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="bu">Base</span>.<span class="pp">@kwdef</span> <span class="kw">struct</span> CityInfo</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a>    name<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    country<span class="op">::</span><span class="dt">String</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>    population<span class="op">::</span><span class="dt">Union{Nothing, Int} </span><span class="op">=</span> <span class="cn">nothing</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    fun_fact<span class="op">::</span><span class="dt">Union{Nothing, String} </span><span class="op">=</span> <span class="cn">nothing</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>schema <span class="op">=</span> AgentFramework.<span class="fu">schema_from_type</span>(CityInfo)</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(JSON3.<span class="fu">pretty</span>(JSON3.<span class="fu">write</span>(schema)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>{
+    "properties": {
+        "fun_fact": {
+            "type": "string"
+        },
+        "name": {
+            "type": "string"
+        },
+        "population": {
+            "type": "integer"
+        },
+        "country": {
+            "type": "string"
+        }
+    },
+    "required": [
+        "name",
+        "country"
+    ],
+    "type": "object"
+}nothing</code></pre>
+</div>
+</div>
+<p>Note that <code>population</code> and <code>fun_fact</code> are not in the <code>"required"</code> list, so the model may omit them.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 52%">
+<col style="width: 47%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>schema_from_type(T)</code></td>
+<td>Generate JSON Schema from a Julia struct</td>
+</tr>
+<tr class="even">
+<td><code>response_format_for(T)</code></td>
+<td>Build <code>response_format</code> dict for <code>ChatOptions</code></td>
+</tr>
+<tr class="odd">
+<td><code>run_agent(T, agent, input)</code></td>
+<td>One-step typed agent run → <code>StructuredOutput{T}</code></td>
+</tr>
+<tr class="even">
+<td><code>parse_structured(T, response)</code></td>
+<td>Parse an <code>AgentResponse</code> into <code>StructuredOutput{T}</code></td>
+</tr>
+<tr class="odd">
+<td><code>result.value</code></td>
+<td>The parsed Julia struct</td>
+</tr>
+<tr class="even">
+<td><code>result.raw_text</code></td>
+<td>The raw JSON from the model</td>
+</tr>
+</tbody>
+</table>
+<p>Structured output turns the LLM into a typed data source — no regex, no string splitting, just Julia structs.</p>
+<p>Next, see <a href="../06_middleware/06_middleware.qmd">06 — Middleware</a> to learn how to intercept and modify agent behaviour.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

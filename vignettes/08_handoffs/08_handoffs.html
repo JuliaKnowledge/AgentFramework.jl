@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="AgentFramework.jl">
+
+<title>Multi-Agent Handoffs</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="08_handoffs_files/libs/clipboard/clipboard.min.js"></script>
+<script src="08_handoffs_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="08_handoffs_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="08_handoffs_files/libs/quarto-html/popper.min.js"></script>
+<script src="08_handoffs_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="08_handoffs_files/libs/quarto-html/anchor.min.js"></script>
+<link href="08_handoffs_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="08_handoffs_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="08_handoffs_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="08_handoffs_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="08_handoffs_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#what-are-handoffs" id="toc-what-are-handoffs" class="nav-link" data-scroll-target="#what-are-handoffs">What Are Handoffs?</a></li>
+  <li><a href="#creating-specialist-agents" id="toc-creating-specialist-agents" class="nav-link" data-scroll-target="#creating-specialist-agents">Creating Specialist Agents</a></li>
+  <li><a href="#creating-handoff-tools" id="toc-creating-handoff-tools" class="nav-link" data-scroll-target="#creating-handoff-tools">Creating Handoff Tools</a></li>
+  <li><a href="#exposing-handoffs-as-function-tools" id="toc-exposing-handoffs-as-function-tools" class="nav-link" data-scroll-target="#exposing-handoffs-as-function-tools">Exposing Handoffs as Function Tools</a></li>
+  <li><a href="#running-the-triage-agent" id="toc-running-the-triage-agent" class="nav-link" data-scroll-target="#running-the-triage-agent">Running the Triage Agent</a></li>
+  <li><a href="#transfer-instructions" id="toc-transfer-instructions" class="nav-link" data-scroll-target="#transfer-instructions">Transfer Instructions</a></li>
+  <li><a href="#including-conversation-history" id="toc-including-conversation-history" class="nav-link" data-scroll-target="#including-conversation-history">Including Conversation History</a></li>
+  <li><a href="#direct-handoff-execution" id="toc-direct-handoff-execution" class="nav-link" data-scroll-target="#direct-handoff-execution">Direct Handoff Execution</a></li>
+  <li><a href="#the-handoff-flow" id="toc-the-handoff-flow" class="nav-link" data-scroll-target="#the-handoff-flow">The Handoff Flow</a></li>
+  <li><a href="#handoffs-vs.-workflows" id="toc-handoffs-vs.-workflows" class="nav-link" data-scroll-target="#handoffs-vs.-workflows">Handoffs vs.&nbsp;Workflows</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="08_handoffs.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="08_handoffs.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Multi-Agent Handoffs</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>AgentFramework.jl </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>A single agent can only do so much. In practice you often want <strong>specialists</strong> — one agent that triages questions, another that handles math, a third for creative writing. <strong>Handoffs</strong> let agents delegate work to each other.</p>
+<p>By the end you will know how to:</p>
+<ol type="1">
+<li>Create a <code>HandoffTool</code> that connects two agents.</li>
+<li>Use <code>handoff_as_function_tool</code> to expose a handoff as a regular tool.</li>
+<li>Configure <code>transfer_instructions</code> and <code>include_history</code>.</li>
+<li>Decide when to use handoffs vs.&nbsp;workflows.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="what-are-handoffs" class="level2">
+<h2 class="anchored" data-anchor-id="what-are-handoffs">What Are Handoffs?</h2>
+<p>A handoff is a directed link from one agent to another. When a <strong>triage</strong> agent decides it cannot answer a question itself, it calls a handoff tool that transfers control to a <strong>specialist</strong> agent. The specialist runs with the user’s message (and optionally the conversation history) and returns a response.</p>
+<pre><code>User ──► Triage Agent ──handoff──► Math Expert ──► Response</code></pre>
+</section>
+<section id="creating-specialist-agents" class="level2">
+<h2 class="anchored" data-anchor-id="creating-specialist-agents">Creating Specialist Agents</h2>
+<p>Let’s build a triage agent that routes to either a <strong>math expert</strong> or a <strong>general knowledge</strong> agent:</p>
+<div id="4" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>math_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"MathExpert"</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Specialist for math and arithmetic questions."</span>,</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"""You are a math expert. Solve problems step by step.</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="st">    Show your working clearly. Only answer math questions."""</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>general_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"GeneralAssistant"</span>,</span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Handles general knowledge questions."</span>,</span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"""You are a general knowledge assistant.</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a><span class="st">    Answer questions about history, science, geography, and culture.</span></span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a><span class="st">    Keep answers concise."""</span>,</span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>Agent("GeneralAssistant", 0 tools)</code></pre>
+</div>
+</div>
+</section>
+<section id="creating-handoff-tools" class="level2">
+<h2 class="anchored" data-anchor-id="creating-handoff-tools">Creating Handoff Tools</h2>
+<p>A <code>HandoffTool</code> wraps a target agent as a callable tool. The triage agent sees it in its tool list and can invoke it to delegate:</p>
+<div id="6" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>math_handoff <span class="op">=</span> <span class="fu">HandoffTool</span>(</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"transfer_to_math"</span>,</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Transfer to the math expert for math questions."</span>,</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    target <span class="op">=</span> math_agent,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>general_handoff <span class="op">=</span> <span class="fu">HandoffTool</span>(</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"transfer_to_general"</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Transfer to general assistant for non-math questions."</span>,</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    target <span class="op">=</span> general_agent,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>HandoffTool("transfer_to_general" → "GeneralAssistant")</code></pre>
+</div>
+</div>
+</section>
+<section id="exposing-handoffs-as-function-tools" class="level2">
+<h2 class="anchored" data-anchor-id="exposing-handoffs-as-function-tools">Exposing Handoffs as Function Tools</h2>
+<p>To add handoffs to a triage agent’s tool list, convert them with <code>handoff_as_function_tool</code>:</p>
+<div id="8" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>triage_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"TriageAgent"</span>,</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"""You are a routing agent. Your ONLY job is to decide</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="st">    which specialist should handle the user's question:</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a><span class="st">    - For math/arithmetic → use transfer_to_math</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a><span class="st">    - For everything else → use transfer_to_general</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a><span class="st">    Always transfer. Never answer directly."""</span>,</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb8-9"><a href="#cb8-9" aria-hidden="true" tabindex="-1"></a>    tools <span class="op">=</span> [</span>
+<span id="cb8-10"><a href="#cb8-10" aria-hidden="true" tabindex="-1"></a>        <span class="fu">handoff_as_function_tool</span>(math_handoff),</span>
+<span id="cb8-11"><a href="#cb8-11" aria-hidden="true" tabindex="-1"></a>        <span class="fu">handoff_as_function_tool</span>(general_handoff),</span>
+<span id="cb8-12"><a href="#cb8-12" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb8-13"><a href="#cb8-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>Agent("TriageAgent", 2 tools)</code></pre>
+</div>
+</div>
+</section>
+<section id="running-the-triage-agent" class="level2">
+<h2 class="anchored" data-anchor-id="running-the-triage-agent">Running the Triage Agent</h2>
+<p>When the triage agent receives a question, it selects the appropriate handoff tool. The framework automatically executes the handoff and returns the specialist’s response:</p>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> <span class="fu">run_agent</span>(triage_agent, <span class="st">"What is the integral of x^2?"</span>)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(r.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>The integral of x² is (x³)/3 + C.
+
+Step by step:
+∫ x² dx = x^(2+1) / (2+1) + C = x³/3 + C</code></pre>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>r <span class="op">=</span> <span class="fu">run_agent</span>(triage_agent, <span class="st">"Who painted the Mona Lisa?"</span>)</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(r.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>The Mona Lisa was painted by Leonardo da Vinci, completed around 1519.</code></pre>
+</section>
+<section id="transfer-instructions" class="level2">
+<h2 class="anchored" data-anchor-id="transfer-instructions">Transfer Instructions</h2>
+<p>You can add <code>transfer_instructions</code> that are prepended to the specialist’s system prompt when a handoff occurs. This provides context about what the specialist should focus on:</p>
+<div id="14" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>detailed_math_handoff <span class="op">=</span> <span class="fu">HandoffTool</span>(</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"transfer_to_math_detailed"</span>,</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Transfer to math expert with detailed instructions."</span>,</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    target <span class="op">=</span> math_agent,</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    transfer_instructions <span class="op">=</span> <span class="st">"The user needs a detailed step-by-step solution. "</span></span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>        <span class="op">*</span> <span class="st">"Show all intermediate calculations."</span>,</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>HandoffTool("transfer_to_math_detailed" → "MathExpert")</code></pre>
+</div>
+</div>
+</section>
+<section id="including-conversation-history" class="level2">
+<h2 class="anchored" data-anchor-id="including-conversation-history">Including Conversation History</h2>
+<p>By default, <code>include_history = true</code> — the specialist receives the full conversation so far. Set it to <code>false</code> for a clean-slate handoff:</p>
+<div id="16" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>fresh_handoff <span class="op">=</span> <span class="fu">HandoffTool</span>(</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"transfer_fresh"</span>,</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Transfer with no history."</span>,</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>    target <span class="op">=</span> general_agent,</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    include_history <span class="op">=</span> <span class="cn">false</span>,</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>HandoffTool("transfer_fresh" → "GeneralAssistant")</code></pre>
+</div>
+</div>
+<p>When <code>include_history = false</code>, only the current user message is sent to the specialist. This is useful when the prior conversation might confuse the specialist or when you want strict isolation.</p>
+</section>
+<section id="direct-handoff-execution" class="level2">
+<h2 class="anchored" data-anchor-id="direct-handoff-execution">Direct Handoff Execution</h2>
+<p>You can also execute a handoff programmatically without going through the tool system, using <code>execute_handoff</code>:</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span>: execute_handoff, Message</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [<span class="fu">Message</span>(role <span class="op">=</span> <span class="st">"user"</span>, text <span class="op">=</span> <span class="st">"Solve 2x + 3 = 11"</span>)]</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">execute_handoff</span>(math_handoff, messages)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>2x + 3 = 11
+2x = 8
+x = 4</code></pre>
+</section>
+<section id="the-handoff-flow" class="level2">
+<h2 class="anchored" data-anchor-id="the-handoff-flow">The Handoff Flow</h2>
+<p>Here is what happens when the triage agent invokes a handoff tool:</p>
+<ol type="1">
+<li>The triage agent calls <code>transfer_to_math(message="What is 2+2?")</code>.</li>
+<li><code>handoff_as_function_tool</code> intercepts the call.</li>
+<li><code>execute_handoff</code> runs the target agent (<code>MathExpert</code>) with the message.</li>
+<li>The specialist’s response is returned as the tool result.</li>
+<li>The triage agent incorporates the result into its own response.</li>
+</ol>
+</section>
+<section id="handoffs-vs.-workflows" class="level2">
+<h2 class="anchored" data-anchor-id="handoffs-vs.-workflows">Handoffs vs.&nbsp;Workflows</h2>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Feature</th>
+<th>Handoffs</th>
+<th>Workflows</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Topology</td>
+<td>Star (triage → specialists)</td>
+<td>DAG (any graph)</td>
+</tr>
+<tr class="even">
+<td>Control</td>
+<td>Agent decides at runtime</td>
+<td>Pre-defined edges</td>
+</tr>
+<tr class="odd">
+<td>Complexity</td>
+<td>Simple delegation</td>
+<td>Multi-step pipelines</td>
+</tr>
+<tr class="even">
+<td>State</td>
+<td>Conversation-based</td>
+<td>Shared workflow state</td>
+</tr>
+<tr class="odd">
+<td>Best for</td>
+<td>Routing, delegation</td>
+<td>Pipelines, fan-out/fan-in</td>
+</tr>
+</tbody>
+</table>
+<p>Use <strong>handoffs</strong> when an agent should dynamically choose a specialist. Use <strong>workflows</strong> (see <a href="../09_workflows/09_workflows.qmd">09 — Workflows</a>) when you need a fixed processing pipeline.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<ol type="1">
+<li><strong><code>HandoffTool</code></strong> connects a source agent to a target agent.</li>
+<li><strong><code>handoff_as_function_tool</code></strong> makes a handoff callable as a regular tool.</li>
+<li><strong><code>execute_handoff</code></strong> runs a handoff programmatically.</li>
+<li><strong><code>transfer_instructions</code></strong> customize the specialist’s behavior per handoff.</li>
+<li><strong><code>include_history</code></strong> controls whether the full conversation is forwarded.</li>
+</ol>
+<p>Next, see <a href="../09_workflows/09_workflows.qmd">09 — Workflows</a> to build DAG-based multi-agent pipelines.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

@@ -1,0 +1,373 @@
+# DAG-Based Workflows
+AgentFramework.jl
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [What Are Workflows?](#what-are-workflows)
+- [A Simple Pipeline: Uppercase → Reverse →
+  Exclaim](#a-simple-pipeline-uppercase--reverse--exclaim)
+  - [Step 1: Define Executors](#step-1-define-executors)
+  - [Step 2: Build the Workflow](#step-2-build-the-workflow)
+  - [Step 3: Run the Workflow](#step-3-run-the-workflow)
+- [Inspecting the Result](#inspecting-the-result)
+- [WorkflowContext Methods](#workflowcontext-methods)
+- [Using Shared State](#using-shared-state)
+- [Fan-Out: One-to-Many](#fan-out-one-to-many)
+- [Fan-In: Many-to-One](#fan-in-many-to-one)
+- [Agent Executors](#agent-executors)
+- [Execution Model Visualized](#execution-model-visualized)
+- [Summary](#summary)
+
+## Overview
+
+When you need more than a simple handoff — say, a multi-step pipeline
+where data flows through processing stages — you need a **workflow**.
+AgentFramework provides a Pregel-inspired, superstep-based execution
+engine for DAG workflows.
+
+By the end you will know how to:
+
+1.  Define `ExecutorSpec` nodes with custom handler functions.
+2.  Wire them together using `WorkflowBuilder`.
+3.  Run workflows and inspect `WorkflowRunResult`.
+4.  Use `WorkflowContext` methods: `send_message`, `yield_output`,
+    `get_state`, `set_state!`.
+5.  Build fan-out and fan-in topologies.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the
+`qwen3:8b` model pulled:
+
+``` bash
+ollama pull qwen3:8b
+```
+
+## Setup
+
+``` julia
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## What Are Workflows?
+
+A workflow is a **directed acyclic graph** (DAG) of executors connected
+by edges. Execution follows a **superstep** model:
+
+1.  Ready executors (those with pending messages) run concurrently.
+2.  Messages produced in a superstep are delivered at the boundary.
+3.  The next superstep begins with the newly-ready executors.
+4.  Execution stops when no more messages are in flight.
+
+This is inspired by Google’s Pregel graph-processing model.
+
+## A Simple Pipeline: Uppercase → Reverse → Exclaim
+
+Let’s build a three-stage text processing pipeline:
+
+    "hello world" ──► [uppercase] ──► [reverse] ──► [exclaim] ──► "!DLROW OLLEH!!!"
+
+### Step 1: Define Executors
+
+Each `ExecutorSpec` has an `id` and a `handler` function. The handler
+receives `(data, ctx)` where `ctx` is a `WorkflowContext`:
+
+``` julia
+upper_exec = ExecutorSpec(
+    id = "uppercase",
+    description = "Converts text to uppercase",
+    handler = (data, ctx) -> begin
+        result = uppercase(data)
+        send_message(ctx, result)
+    end,
+)
+
+reverse_exec = ExecutorSpec(
+    id = "reverse",
+    description = "Reverses a string",
+    handler = (data, ctx) -> begin
+        result = reverse(data)
+        send_message(ctx, result)
+    end,
+)
+
+exclaim_exec = ExecutorSpec(
+    id = "exclaim",
+    description = "Adds exclamation marks",
+    handler = (data, ctx) -> begin
+        result = data * "!!!"
+        yield_output(ctx, result)
+    end,
+)
+```
+
+    ExecutorSpec("exclaim")
+
+Notice the difference:
+
+- **`send_message(ctx, data)`** — forwards data to downstream executors.
+- **`yield_output(ctx, data)`** — marks data as a final workflow output.
+
+### Step 2: Build the Workflow
+
+Use `WorkflowBuilder` to wire executors together:
+
+``` julia
+workflow = WorkflowBuilder(name = "TextPipeline", start = upper_exec) |>
+    b -> add_executor(b, reverse_exec) |>
+    b -> add_executor(b, exclaim_exec) |>
+    b -> add_edge(b, "uppercase", "reverse") |>
+    b -> add_edge(b, "reverse", "exclaim") |>
+    b -> add_output(b, "exclaim") |>
+    build
+```
+
+    ┌ Warning: Validation warning: Output executor 'exclaim' has unspecified yield_types ([Any])
+    └ @ AgentFramework ~/Projects/agent-framework/AgentFramework.jl/src/workflows/builder.jl:177
+
+    Workflow("TextPipeline", 3 executors, 2 edges)
+
+The `start` executor receives the initial input. `add_output` designates
+which executors produce final outputs.
+
+### Step 3: Run the Workflow
+
+``` julia
+result = run_workflow(workflow, "hello world")
+outputs = get_outputs(result)
+println("Output: ", outputs[1])
+```
+
+**Expected output:**
+
+    Output: !DLROW OLLEH!!!
+
+## Inspecting the Result
+
+`WorkflowRunResult` contains the full execution trace:
+
+``` julia
+# All events (start, executor invoked/completed, supersteps, output)
+for evt in result.events
+    println("[$(evt.type)] executor=$(something(evt.executor_id, "—"))")
+end
+```
+
+**Expected output:**
+
+    [EVT_STARTED] executor=—
+    [EVT_SUPERSTEP_STARTED] executor=—
+    [EVT_EXECUTOR_INVOKED] executor=uppercase
+    [EVT_EXECUTOR_COMPLETED] executor=uppercase
+    [EVT_SUPERSTEP_COMPLETED] executor=—
+    [EVT_SUPERSTEP_STARTED] executor=—
+    [EVT_EXECUTOR_INVOKED] executor=reverse
+    [EVT_EXECUTOR_COMPLETED] executor=reverse
+    [EVT_SUPERSTEP_COMPLETED] executor=—
+    [EVT_SUPERSTEP_STARTED] executor=—
+    [EVT_EXECUTOR_INVOKED] executor=exclaim
+    [EVT_EXECUTOR_COMPLETED] executor=exclaim
+    [EVT_OUTPUT] executor=exclaim
+    [EVT_SUPERSTEP_COMPLETED] executor=—
+
+Each executor runs in its own superstep because the pipeline is
+sequential.
+
+## WorkflowContext Methods
+
+Inside a handler, the `WorkflowContext` provides:
+
+| Method | Purpose |
+|----|----|
+| `send_message(ctx, data)` | Send data to downstream executors |
+| `send_message(ctx, data; target_id="id")` | Send to a specific executor |
+| `yield_output(ctx, data)` | Emit a workflow-level output |
+| `get_state(ctx, key)` | Read from shared workflow state |
+| `set_state!(ctx, key, value)` | Write to shared workflow state |
+| `request_info(ctx, data)` | Request external input (human-in-the-loop) |
+
+## Using Shared State
+
+Executors can communicate through shared state in addition to messages:
+
+``` julia
+counter_exec = ExecutorSpec(
+    id = "counter",
+    description = "Counts characters and stores in state",
+    handler = (data, ctx) -> begin
+        set_state!(ctx, "char_count", length(data))
+        send_message(ctx, data)
+    end,
+)
+
+reporter_exec = ExecutorSpec(
+    id = "reporter",
+    description = "Reads the character count from state",
+    handler = (data, ctx) -> begin
+        count = get_state(ctx, "char_count", 0)
+        yield_output(ctx, "Processed '$data' ($(count) chars)")
+    end,
+)
+```
+
+    ExecutorSpec("reporter")
+
+``` julia
+state_workflow = WorkflowBuilder(name = "StatePipeline", start = counter_exec) |>
+    b -> add_executor(b, reporter_exec) |>
+    b -> add_edge(b, "counter", "reporter") |>
+    b -> add_output(b, "reporter") |>
+    build
+
+result = run_workflow(state_workflow, "hello")
+println(get_outputs(result)[1])
+```
+
+**Expected output:**
+
+    Processed 'hello' (5 chars)
+
+## Fan-Out: One-to-Many
+
+Use `add_fan_out` to broadcast a message to multiple executors
+simultaneously:
+
+``` julia
+analyzer1 = ExecutorSpec(
+    id = "word_counter",
+    handler = (data, ctx) -> begin
+        count = length(split(data))
+        yield_output(ctx, "Words: $count")
+    end,
+)
+
+analyzer2 = ExecutorSpec(
+    id = "char_counter",
+    handler = (data, ctx) -> begin
+        yield_output(ctx, "Characters: $(length(data))")
+    end,
+)
+```
+
+    ExecutorSpec("char_counter")
+
+``` julia
+fan_workflow = WorkflowBuilder(name = "FanOut", start = upper_exec) |>
+    b -> add_executor(b, analyzer1) |>
+    b -> add_executor(b, analyzer2) |>
+    b -> add_fan_out(b, "uppercase", ["word_counter", "char_counter"]) |>
+    b -> add_output(b, "word_counter") |>
+    b -> add_output(b, "char_counter") |>
+    build
+
+result = run_workflow(fan_workflow, "hello world")
+for output in get_outputs(result)
+    println(output)
+end
+```
+
+**Expected output:**
+
+    Words: 2
+    Characters: 11
+
+Both analyzers run in the **same superstep** because they receive
+messages at the same time — true parallelism.
+
+## Fan-In: Many-to-One
+
+Use `add_fan_in` to wait for messages from multiple sources before an
+executor runs:
+
+``` julia
+aggregator = ExecutorSpec(
+    id = "aggregator",
+    description = "Combines results from multiple sources",
+    handler = (data, ctx) -> begin
+        # data arrives as a vector of messages from all fan-in sources
+        combined = join(data, " | ")
+        yield_output(ctx, "Summary: $combined")
+    end,
+)
+```
+
+    ExecutorSpec("aggregator")
+
+The fan-in executor only runs once **all** specified source executors
+have contributed a message.
+
+## Agent Executors
+
+You can wrap an `Agent` as a workflow executor using `agent_executor`:
+
+``` julia
+client = OllamaChatClient(model = "qwen3:8b")
+
+writer = Agent(
+    name = "Writer",
+    instructions = "You write creative one-sentence slogans.",
+    client = client,
+)
+
+reviewer = Agent(
+    name = "Reviewer",
+    instructions = "You review slogans and provide brief feedback.",
+    client = client,
+)
+
+writer_exec = agent_executor("writer", writer, forward_response = true)
+reviewer_exec = agent_executor("reviewer", reviewer, yield_response = true)
+
+agent_workflow = WorkflowBuilder(name = "WriterReviewer", start = writer_exec) |>
+    b -> add_executor(b, reviewer_exec) |>
+    b -> add_edge(b, "writer", "reviewer") |>
+    b -> add_output(b, "reviewer") |>
+    build
+
+result = run_workflow(agent_workflow, "Create a slogan for an electric bicycle.")
+println(get_outputs(result)[1])
+```
+
+**Expected output:**
+
+    The slogan "Ride the Future, Powered by You" is catchy and emphasizes
+    sustainability. Consider making it shorter for better memorability.
+
+## Execution Model Visualized
+
+    Superstep 1:  [uppercase] ──message──►
+    Superstep 2:  [reverse]   ──message──►
+    Superstep 3:  [exclaim]   ──output──► Final Result
+
+At each superstep boundary, all messages produced in the previous step
+are delivered. Executors with no pending messages are idle.
+
+## Summary
+
+| Concept | Description |
+|----|----|
+| `ExecutorSpec` | A processing node with an `id` and `handler` function |
+| `WorkflowBuilder` | Fluent API for wiring executors with edges |
+| `send_message` | Forward data to downstream executors |
+| `yield_output` | Emit a final workflow output |
+| `get_state`/`set_state!` | Shared state between executors |
+| `add_edge` | Direct 1:1 connection |
+| `add_fan_out` | 1:N broadcast |
+| `add_fan_in` | N:1 aggregation (waits for all sources) |
+| `agent_executor` | Wrap an Agent as a workflow node |
+
+Key takeaways:
+
+1.  Workflows use a **superstep** execution model for deterministic
+    parallelism.
+2.  `WorkflowBuilder` provides a fluent API for DAG construction.
+3.  Executors communicate via **messages** (edges) and **shared state**.
+4.  `agent_executor` lets you mix LLM agents with pure-function
+    executors.
+
+Next, see [10 — Advanced
+Workflows](../10_advanced_workflows/10_advanced_workflows.qmd) for
+conditional edges, human-in-the-loop, and streaming workflows.

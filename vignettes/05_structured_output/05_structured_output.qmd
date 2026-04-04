@@ -1,0 +1,269 @@
+---
+title: "Structured Output"
+author: "AgentFramework.jl"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    toc: true
+engine: julia
+---
+
+## Overview
+
+By default, LLMs return free-form text. **Structured output** constrains the
+model to return valid JSON conforming to a schema you define, giving you typed
+Julia structs instead of strings you have to parse.
+
+In this vignette you will learn how to:
+
+1. Define a `@kwdef` struct as your response type.
+2. Use `schema_from_type(T)` to inspect the generated JSON Schema.
+3. Call `run_agent(Type, agent, input)` for automatic typed responses.
+4. Access fields on the returned `StructuredOutput{T}`.
+5. Use the lower-level `response_format_for` and `parse_structured` API.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the `qwen3:8b` model
+pulled:
+
+```bash
+ollama pull qwen3:8b
+```
+
+::: {.callout-note}
+Structured output requires the model to support JSON mode or guided generation.
+Most modern models (Qwen, Llama 3, Gemma) work well with this feature via Ollama.
+:::
+
+## Setup
+
+```{julia}
+#| output: false
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## Why Structured Output?
+
+Consider asking an LLM to review a movie. The free-text answer might say
+*"I'd give it 8 out of 10"* or *"Rating: 8/10"* — but extracting the numeric
+rating requires fragile regex or string parsing. Structured output solves this
+by asking the model to return JSON that maps directly to your Julia type.
+
+## Defining a Response Type
+
+Use `@kwdef` to define a struct whose fields describe the shape of the
+response you want:
+
+```{julia}
+Base.@kwdef struct MovieReview
+    title::String
+    rating::Int
+    summary::String
+    recommended::Bool
+end
+```
+
+Each field name becomes a JSON property. The type mapping is:
+
+| Julia type | JSON Schema type |
+|-----------|-----------------|
+| `String` | `"string"` |
+| `Int` | `"integer"` |
+| `Float64` | `"number"` |
+| `Bool` | `"boolean"` |
+| `Vector{T}` | `"array"` |
+| `Union{Nothing, T}` | optional field |
+| Nested struct | nested `"object"` |
+
+## Inspecting the Schema
+
+`schema_from_type` generates the JSON Schema that will be sent to the model:
+
+```{julia}
+using JSON3
+
+schema = AgentFramework.schema_from_type(MovieReview)
+println(JSON3.pretty(JSON3.write(schema)))
+```
+
+This produces a schema with `"type": "object"`, the four properties, and a
+`"required"` array listing all non-optional fields.
+
+## Creating the Agent
+
+```{julia}
+client = OllamaChatClient(model = "qwen3:8b")
+
+agent = Agent(
+    name = "MovieCritic",
+    instructions = "You are a movie critic. Return structured reviews when asked.",
+    client = client,
+)
+```
+
+## Typed Agent Run
+
+The simplest way to get structured output is the typed overload of `run_agent`.
+Pass the struct type as the first argument:
+
+```{julia}
+#| eval: false
+result = run_agent(MovieReview, agent, "Review the movie 'Inception' (2010).")
+
+println(typeof(result))          # StructuredOutput{MovieReview}
+println(result.value.title)      # Inception
+println(result.value.rating)     # 9
+println(result.value.summary)    # A mind-bending sci-fi thriller...
+println(result.value.recommended)  # true
+```
+
+**Expected output:**
+
+```
+StructuredOutput{MovieReview}
+Inception
+9
+A mind-bending sci-fi thriller about dreams within dreams, featuring stunning visuals and a thought-provoking narrative.
+true
+```
+
+The `StructuredOutput{T}` wrapper holds:
+
+- **`value::T`** — The parsed struct with all fields populated.
+- **`raw_text::String`** — The raw JSON string returned by the model.
+
+## Accessing the Raw JSON
+
+Sometimes you want to see exactly what the model returned before parsing:
+
+```{julia}
+#| eval: false
+println("Raw JSON:")
+println(result.raw_text)
+```
+
+**Expected output:**
+
+```
+Raw JSON:
+{"title":"Inception","rating":9,"summary":"A mind-bending sci-fi thriller about dreams within dreams, featuring stunning visuals and a thought-provoking narrative.","recommended":true}
+```
+
+## Nested Types
+
+Structured output supports nested structs. For example, a book review with
+a nested author type:
+
+```{julia}
+Base.@kwdef struct Author
+    name::String
+    nationality::String
+end
+
+Base.@kwdef struct BookReview
+    title::String
+    author::Author
+    rating::Int
+    themes::Vector{String}
+end
+
+schema = AgentFramework.schema_from_type(BookReview)
+println(JSON3.pretty(JSON3.write(schema)))
+```
+
+```{julia}
+#| eval: false
+result = run_agent(BookReview, agent,
+    "Review '1984' by George Orwell.")
+
+println(result.value.title)              # 1984
+println(result.value.author.name)        # George Orwell
+println(result.value.author.nationality) # British
+println(result.value.themes)             # ["Totalitarianism", "Surveillance", ...]
+```
+
+**Expected output:**
+
+```
+1984
+George Orwell
+British
+["Totalitarianism", "Surveillance", "Censorship"]
+```
+
+## Manual Approach: response_format_for and parse_structured
+
+Under the hood, the typed `run_agent` does two things:
+
+1. Sets `response_format` in `ChatOptions` via `response_format_for(T)`.
+2. Parses the response with `parse_structured(T, response)`.
+
+You can do this manually for more control:
+
+```{julia}
+#| eval: false
+# Step 1: Build options with the response format
+rf = AgentFramework.response_format_for(MovieReview)
+opts = ChatOptions(response_format = rf)
+
+# Step 2: Run the agent with those options
+response = run_agent(agent, "Review 'The Shawshank Redemption'."; options = opts)
+println("Raw text: ", response.text)
+
+# Step 3: Parse the response into the struct
+result = AgentFramework.parse_structured(MovieReview, response)
+println("Title: ", result.value.title)
+println("Rating: ", result.value.rating)
+```
+
+**Expected output:**
+
+```
+Raw text: {"title":"The Shawshank Redemption","rating":10,"summary":"A powerful drama about hope and resilience in the face of injustice.","recommended":true}
+Title: The Shawshank Redemption
+Rating: 10
+```
+
+## Optional Fields
+
+Use `Union{Nothing, T}` for fields that may be absent. These are omitted from
+the JSON Schema `"required"` array:
+
+```{julia}
+Base.@kwdef struct CityInfo
+    name::String
+    country::String
+    population::Union{Nothing, Int} = nothing
+    fun_fact::Union{Nothing, String} = nothing
+end
+
+schema = AgentFramework.schema_from_type(CityInfo)
+println(JSON3.pretty(JSON3.write(schema)))
+```
+
+Note that `population` and `fun_fact` are not in the `"required"` list,
+so the model may omit them.
+
+## Summary
+
+| Function | Purpose |
+|----------|---------|
+| `schema_from_type(T)` | Generate JSON Schema from a Julia struct |
+| `response_format_for(T)` | Build `response_format` dict for `ChatOptions` |
+| `run_agent(T, agent, input)` | One-step typed agent run → `StructuredOutput{T}` |
+| `parse_structured(T, response)` | Parse an `AgentResponse` into `StructuredOutput{T}` |
+| `result.value` | The parsed Julia struct |
+| `result.raw_text` | The raw JSON from the model |
+
+Structured output turns the LLM into a typed data source — no regex, no
+string splitting, just Julia structs.
+
+Next, see [06 — Middleware](../06_middleware/06_middleware.qmd) to learn how
+to intercept and modify agent behaviour.

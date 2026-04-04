@@ -1,0 +1,559 @@
+---
+title: "Structured GraphRAG: From Tabular Data to Knowledge Graphs"
+author: "AgentFramework.jl"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    toc: true
+engine: julia
+---
+
+## Overview
+
+Standard RAG takes structured data (like a CSV), turns it into text chunks, embeds it, and searches for "similar" chunks — destroying the exact relationships in your data. **Structured GraphRAG** takes a different approach: map tabular data directly onto an RDF knowledge graph using an ontology, preserving every relationship with 100% fidelity.
+
+In this vignette, you will learn how to:
+
+- Load structured tabular data (CSV) and map it to an RDF knowledge graph
+- Use an OWL ontology to give semantic meaning to columns and relationships
+- Query the knowledge graph with SPARQL
+- Build a programmatic GraphRAG pipeline that retrieves graph facts and generates LLM answers
+- Compare structured GraphRAG with plain LLM responses
+
+This follows the same approach as the [Agent Framework `graph_RAG_structured` sample](https://github.com/microsoft/agent-framework), ported to Julia using RDFLib.jl.
+
+## Prerequisites
+
+- **Ollama** running locally:
+  ```bash
+  ollama pull gemma3
+  ```
+
+## Setup
+
+```{julia}
+#| output: false
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..", ".."))
+using AgentFramework
+using RDFLib
+using DelimitedFiles
+```
+
+## The Dataset: Jaguars of the Americas
+
+Our dataset tracks individual jaguars across the Americas — their locations, monitoring organizations, threats, and status. This is real-world structured data with multi-valued fields (semicolon-separated), optional columns, and mixed data types.
+
+```{julia}
+csv_path = joinpath(@__DIR__, "data", "jaguars.csv")
+println(read(csv_path, String))
+```
+
+## Step 1: Loading and Preprocessing the CSV
+
+We parse the CSV into a structured format, handling multi-valued fields by splitting on semicolons.
+
+```{julia}
+# Parse CSV manually to handle the complex structure
+lines = split(strip(read(csv_path, String)), '\n')
+header = [strip(h) for h in split(lines[1], ',')]
+println("Columns: ", join(header, ", "))
+
+# Parse each row into a Dict
+records = Dict{String,String}[]
+for line in lines[2:end]
+    # Simple CSV parsing (handles our data which has no quoted commas)
+    fields = split(line, ',')
+    row = Dict{String,String}()
+    for (i, col) in enumerate(header)
+        val = i <= length(fields) ? strip(fields[i]) : ""
+        row[col] = val
+    end
+    push!(records, row)
+end
+
+println("\nLoaded $(length(records)) jaguar records")
+for r in records[1:3]
+    println("  $(r["name"]) ($(r["gender"])) — $(r["location"])")
+end
+```
+
+## Step 2: Loading the Ontology
+
+The ontology defines the semantic schema — what classes exist (Jaguar, Location, ConservationOrganization, Threat, etc.) and how they relate. This is what makes our graph meaningful rather than just a bag of triples.
+
+```{julia}
+ontology_path = joinpath(@__DIR__, "data", "jaguar_ontology.ttl")
+kg = RDFGraph()
+
+# Load the OWL ontology
+ontology_ttl = read(ontology_path, String)
+parse_rdf!(kg, ontology_ttl, TurtleFormat())
+
+println("Ontology loaded: $(length(kg)) triples")
+
+# Show the class hierarchy
+classes = sparql_query(kg, """
+PREFIX owl: <http://www.w3.org/2002/07/owl#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?class ?parent WHERE {
+    ?class a owl:Class .
+    OPTIONAL { ?class rdfs:subClassOf ?parent }
+}
+""")
+
+println("\nOntology classes:")
+for r in classes
+    cls = split(string(r["class"]), "#")[end]
+    parent = haskey(r, "parent") ? " → " * split(string(r["parent"]), "#")[end] : ""
+    println("  $cls$parent")
+end
+```
+
+## Step 3: Mapping Tabular Data to RDF
+
+This is the core of structured GraphRAG: deterministically mapping each CSV row to RDF triples following the ontology. Unlike LLM-based extraction, this is **100% precise** — no hallucination, no missed relationships.
+
+```{julia}
+ont = Namespace("http://example.org/ontology#")
+res = Namespace("http://example.org/resource#")
+
+function to_iri(name::AbstractString)
+    replace(strip(name), r"[^a-zA-Z0-9]+" => "")
+end
+
+# Map each record to RDF triples
+for record in records
+    id = record["jaguar_id"]
+    jaguar = res(id)
+
+    # Core type and identity
+    add!(kg, Triple(jaguar, RDF.type, ont("Jaguar")))
+    add!(kg, Triple(jaguar, URIRef("http://www.w3.org/2000/01/rdf-schema#label"),
+                    Literal(record["name"])))
+    add!(kg, Triple(jaguar, ont("scientificName"), Literal("Panthera onca")))
+
+    # Gender
+    gender = get(record, "gender", "")
+    if !isempty(gender)
+        add!(kg, Triple(jaguar, ont("hasGender"), Literal(gender)))
+    end
+
+    # Locations (multi-valued, semicolon-separated)
+    location = get(record, "location", "")
+    if !isempty(location)
+        for loc in split(location, ";")
+            loc = strip(loc)
+            loc_iri = res(to_iri(loc))
+            add!(kg, Triple(jaguar, ont("occursIn"), loc_iri))
+            add!(kg, Triple(loc_iri, RDF.type, ont("Location")))
+            add!(kg, Triple(loc_iri, URIRef("http://www.w3.org/2000/01/rdf-schema#label"),
+                            Literal(loc)))
+        end
+    end
+
+    # Monitoring organizations (multi-valued)
+    monitoring_org = get(record, "monitoring_org", "")
+    if !isempty(monitoring_org)
+        for org in split(monitoring_org, ";")
+            org = strip(org)
+            org_iri = res(to_iri(org))
+            add!(kg, Triple(jaguar, ont("monitoredByOrg"), org_iri))
+            add!(kg, Triple(org_iri, RDF.type, ont("ConservationOrganization")))
+            add!(kg, Triple(org_iri, URIRef("http://www.w3.org/2000/01/rdf-schema#label"),
+                            Literal(org)))
+        end
+    end
+
+    # First sighted date
+    first_sighted = get(record, "first_sighted", "")
+    if !isempty(first_sighted)
+        add!(kg, Triple(jaguar, ont("hasMonitoringStartDate"),
+                        Literal(first_sighted)))
+    end
+
+    # Killed status
+    is_killed = get(record, "is_killed", "")
+    if !isempty(is_killed)
+        add!(kg, Triple(jaguar, ont("wasKilled"),
+                        Literal(lowercase(is_killed) == "true" ? "true" : "false")))
+    end
+
+    # Cause of death
+    cause_of_death = get(record, "cause_of_death", "")
+    if !isempty(cause_of_death)
+        add!(kg, Triple(jaguar, ont("causeOfDeath"), Literal(cause_of_death)))
+    end
+
+    # Identification mark
+    identification_mark = get(record, "identification_mark", "")
+    if !isempty(identification_mark)
+        add!(kg, Triple(jaguar, ont("hasIdentificationMark"),
+                        Literal(identification_mark)))
+    end
+
+    # Threats (multi-valued)
+    threats = get(record, "threats", "")
+    if !isempty(threats)
+        for threat in split(threats, ";")
+            threat = strip(threat)
+            threat_iri = res(to_iri(threat))
+            add!(kg, Triple(jaguar, ont("facesThreat"), threat_iri))
+            add!(kg, Triple(threat_iri, RDF.type, ont("Threat")))
+            add!(kg, Triple(threat_iri, URIRef("http://www.w3.org/2000/01/rdf-schema#label"),
+                            Literal(threat)))
+        end
+    end
+
+    # Monitoring techniques (multi-valued)
+    monitoring_technique = get(record, "monitoring_technique", "")
+    if !isempty(monitoring_technique)
+        for tech in split(monitoring_technique, ";")
+            tech = strip(tech)
+            tech_iri = res(to_iri(tech))
+            add!(kg, Triple(jaguar, ont("monitoredByTechnique"), tech_iri))
+            add!(kg, Triple(tech_iri, RDF.type, ont("MonitoringTechnique")))
+            add!(kg, Triple(tech_iri, URIRef("http://www.w3.org/2000/01/rdf-schema#label"),
+                            Literal(tech)))
+        end
+    end
+
+    # Status notes
+    status_notes = get(record, "status_notes", "")
+    if !isempty(status_notes)
+        add!(kg, Triple(jaguar, URIRef("http://www.w3.org/2000/01/rdf-schema#comment"),
+                        Literal(status_notes)))
+    end
+end
+
+println("Knowledge graph after mapping: $(length(kg)) triples")
+```
+
+Let's inspect the graph:
+
+```{julia}
+println(serialize(kg, TurtleFormat()))
+```
+
+## Step 4: Querying the Knowledge Graph
+
+With the data mapped to RDF, we can now run precise SPARQL queries. Unlike vector similarity search, these return **exact** results.
+
+```{julia}
+# Query 1: All jaguars and their locations
+results = sparql_query(kg, """
+PREFIX ont: <http://example.org/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?name ?location WHERE {
+    ?j a ont:Jaguar ;
+       rdfs:label ?name ;
+       ont:occursIn ?loc .
+    ?loc rdfs:label ?location .
+}
+ORDER BY ?name
+""")
+
+println("Jaguars and their locations:")
+for r in results
+    println("  $(string(r["name"])) → $(string(r["location"]))")
+end
+```
+
+```{julia}
+# Query 2: Which jaguars were killed?
+results = sparql_query(kg, """
+PREFIX ont: <http://example.org/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?name ?cause WHERE {
+    ?j a ont:Jaguar ;
+       rdfs:label ?name ;
+       ont:wasKilled "true" .
+    OPTIONAL { ?j ont:causeOfDeath ?cause }
+}
+""")
+
+println("Jaguars that were killed:")
+for r in results
+    cause = haskey(r, "cause") ? " — $(string(r["cause"]))" : ""
+    println("  $(string(r["name"]))$cause")
+end
+```
+
+```{julia}
+# Query 3: Which organizations monitor which jaguars?
+results = sparql_query(kg, """
+PREFIX ont: <http://example.org/ontology#>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+SELECT ?org ?name WHERE {
+    ?j a ont:Jaguar ;
+       rdfs:label ?name ;
+       ont:monitoredByOrg ?o .
+    ?o rdfs:label ?org .
+}
+ORDER BY ?org
+""")
+
+println("Monitoring organizations and their jaguars:")
+current_org = ""
+for r in results
+    org = string(r["org"])
+    if org != current_org
+        println("  $org:")
+        current_org = org
+    end
+    println("    - $(string(r["name"]))")
+end
+```
+
+## Step 5: Retrieval Functions
+
+We define retrieval functions that extract structured context from the knowledge graph for the LLM.
+
+```{julia}
+#| output: false
+
+"""Query all facts about a specific jaguar by name."""
+function query_jaguar(name::String)
+    results = sparql_query(kg, """
+    PREFIX ont: <http://example.org/ontology#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?pred ?obj WHERE {
+        ?j a ont:Jaguar ;
+           rdfs:label "$name" ;
+           ?pred ?obj .
+    }
+    """)
+
+    isempty(results) && return "No jaguar found with name '$name'."
+    lines = String[]
+    for r in results
+        pred = split(string(r["pred"]), r"[#/]")[end]
+        obj = string(r["obj"])
+        # Skip the type triple
+        pred == "type" && continue
+        push!(lines, "$pred: $obj")
+    end
+    return "Facts about $name:\n" * join(lines, "\n")
+end
+
+"""List all jaguars in a given location."""
+function query_location(location::String)
+    results = sparql_query(kg, """
+    PREFIX ont: <http://example.org/ontology#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?name WHERE {
+        ?j a ont:Jaguar ;
+           rdfs:label ?name ;
+           ont:occursIn ?loc .
+        ?loc rdfs:label ?location .
+        FILTER(CONTAINS(LCASE(STR(?location)), LCASE("$location")))
+    }
+    """)
+
+    isempty(results) && return "No jaguars found in '$location'."
+    names = [string(r["name"]) for r in results]
+    return "Jaguars in $location: " * join(names, ", ")
+end
+
+"""Run a custom SPARQL query."""
+function run_sparql(query::String)
+    try
+        results = sparql_query(kg, query)
+        isempty(results) && return "Query returned no results."
+        lines = String[]
+        for row in results
+            parts = ["$k=$(v isa Literal ? string(v) : split(string(v), r"[#/]")[end])" for (k, v) in row]
+            push!(lines, join(parts, ", "))
+        end
+        return "Results ($(length(results)) rows):\n" * join(lines, "\n")
+    catch e
+        return "SPARQL error: $(sprint(showerror, e))"
+    end
+end
+nothing
+```
+
+Let's verify the retrieval functions:
+
+```{julia}
+println(query_jaguar("El Jefe"))
+println()
+println(query_location("Pantanal"))
+```
+
+## Step 6: Structured GraphRAG Pipeline
+
+Now we combine graph retrieval with LLM generation. The pipeline:
+
+1. **Retrieve**: Query the knowledge graph for relevant facts
+2. **Generate**: Pass retrieved facts as context to the LLM
+
+```{julia}
+#| output: false
+client = OllamaChatClient(model="gemma3:latest")
+
+"""Ask a question using structured GraphRAG."""
+function ask_structured_rag(question::String; jaguars::Vector{String}=String[],
+                            locations::Vector{String}=String[],
+                            sparql::String="")
+    # Retrieve context from knowledge graph
+    context_parts = String[]
+    for name in jaguars
+        push!(context_parts, query_jaguar(name))
+    end
+    for loc in locations
+        push!(context_parts, query_location(loc))
+    end
+    if !isempty(sparql)
+        push!(context_parts, run_sparql(sparql))
+    end
+    context = join(context_parts, "\n\n")
+
+    rag_agent = Agent(
+        name="JaguarExpert",
+        instructions="""You are a wildlife conservation expert specializing in jaguars.
+Answer the question using ONLY the knowledge graph facts provided below.
+Do not use your own knowledge. If the facts don't contain enough information, say so.
+
+Knowledge Graph Facts:
+$context""",
+        client=client,
+        options=ChatOptions(temperature=0.1),
+    )
+    response = run_agent(rag_agent, question)
+    return get_text(response)
+end
+nothing
+```
+
+## Step 7: Asking Questions
+
+### Individual jaguar lookup
+
+```{julia}
+answer = ask_structured_rag(
+    "Tell me about El Jefe. Where has he been seen and who monitors him?",
+    jaguars=["El Jefe"],
+)
+println(answer)
+```
+
+### Location-based query
+
+```{julia}
+answer = ask_structured_rag(
+    "Which jaguars have been documented in the Pantanal region?",
+    locations=["Pantanal"],
+    jaguars=["Asa", "Mick", "Ferinha"],
+)
+println(answer)
+```
+
+### Conservation status query
+
+```{julia}
+answer = ask_structured_rag(
+    "Which jaguars have been killed and what were the causes?",
+    jaguars=["Macho B", "Yo'oko"],
+    sparql="""
+    PREFIX ont: <http://example.org/ontology#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?name ?cause WHERE {
+        ?j a ont:Jaguar ; rdfs:label ?name ; ont:wasKilled "true" .
+        OPTIONAL { ?j ont:causeOfDeath ?cause }
+    }""",
+)
+println(answer)
+```
+
+## Step 8: Structured GraphRAG vs Plain LLM
+
+Let's compare the structured GraphRAG pipeline against a plain LLM:
+
+```{julia}
+plain_agent = Agent(
+    name="PlainAssistant",
+    instructions="You are a helpful assistant. Answer questions concisely.",
+    client=client,
+    options=ChatOptions(temperature=0.1),
+)
+
+question = "What monitoring techniques are used to track jaguars in the US?"
+
+println("=" ^ 60)
+println("Question: $question")
+println("=" ^ 60)
+
+println("\n--- Structured GraphRAG (grounded in knowledge graph) ---")
+answer_rag = ask_structured_rag(question,
+    sparql="""
+    PREFIX ont: <http://example.org/ontology#>
+    PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+    SELECT ?name ?technique WHERE {
+        ?j a ont:Jaguar ; rdfs:label ?name ;
+           ont:monitoredByTechnique ?t .
+        ?t rdfs:label ?technique .
+    }""",
+)
+println(answer_rag)
+
+println("\n--- Plain LLM (no knowledge graph) ---")
+response_plain = run_agent(plain_agent, question)
+println(get_text(response_plain))
+```
+
+The structured GraphRAG answer is grounded in the exact data from the CSV, while the plain LLM provides generic knowledge that may not match the specific dataset.
+
+## Step 9: Graph Statistics
+
+```{julia}
+subjects_set = Set(string(t.subject) for t in triples(kg))
+predicates_set = Set(string(t.predicate) for t in triples(kg))
+
+# Count instances by type
+jaguar_count = length(sparql_query(kg, """
+    PREFIX ont: <http://example.org/ontology#>
+    SELECT ?j WHERE { ?j a ont:Jaguar }
+"""))
+location_count = length(sparql_query(kg, """
+    PREFIX ont: <http://example.org/ontology#>
+    SELECT ?l WHERE { ?l a ont:Location }
+"""))
+org_count = length(sparql_query(kg, """
+    PREFIX ont: <http://example.org/ontology#>
+    SELECT ?o WHERE { ?o a ont:ConservationOrganization }
+"""))
+
+println("Knowledge Graph Statistics:")
+println("  Total triples: ", length(kg))
+println("  Unique subjects: ", length(subjects_set))
+println("  Unique predicates: ", length(predicates_set))
+println()
+println("Instance counts:")
+println("  Jaguars: $jaguar_count")
+println("  Locations: $location_count")
+println("  Conservation Orgs: $org_count")
+```
+
+## Summary
+
+| Aspect | Structured GraphRAG | Text-based GraphRAG (Vignette 13) |
+|--------|--------------------|------------------------------------|
+| **Input** | Tabular CSV data | Unstructured text passages |
+| **Extraction** | Deterministic column mapping | LLM-based entity extraction |
+| **Accuracy** | 100% precise | Probabilistic (can miss/hallucinate) |
+| **Ontology** | OWL schema defines classes & properties | Implicit from extraction prompt |
+| **Multi-valued fields** | Split on delimiter, map each | LLM must recognize lists |
+| **Speed** | Instant (no LLM needed for ingestion) | Slow (LLM call per passage) |
+
+### Key Takeaways
+
+1. **Don't embed, map**: Structured data should be mapped directly to a knowledge graph, not embedded into vectors.
+2. **Ontology-driven**: An OWL ontology gives semantic meaning to columns and ensures consistent relationships.
+3. **Zero hallucination ingestion**: Unlike LLM-based extraction, tabular mapping is deterministic and complete.
+4. **SPARQL precision**: Exact queries replace fuzzy similarity search.
+5. **RDFLib.jl**: Provides the full RDF stack for loading ontologies, mapping data, and querying with SPARQL.

@@ -1,0 +1,248 @@
+# Resilience
+AgentFramework.jl
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Why Resilience?](#why-resilience)
+- [Retry Configuration](#retry-configuration)
+- [Creating Retry Middleware](#creating-retry-middleware)
+- [Convenience: `with_retry!`](#convenience-with_retry)
+- [Token Bucket Rate Limiting](#token-bucket-rate-limiting)
+- [Rate Limit Middleware](#rate-limit-middleware)
+- [Composing Both Middlewares](#composing-both-middlewares)
+- [Running with Resilience](#running-with-resilience)
+- [Which Errors Are Retryable?](#which-errors-are-retryable)
+- [Summary](#summary)
+
+## Overview
+
+LLM APIs are inherently unreliable: rate limits, transient errors, and
+network hiccups are facts of life. This vignette shows how to make your
+agents production-grade using retry middleware and token-bucket rate
+limiting. By the end you will know how to:
+
+1.  Configure `RetryConfig` with exponential backoff and jitter.
+2.  Create `retry_chat_middleware` and add it to an agent.
+3.  Use the convenience `with_retry!` helper.
+4.  Build a `TokenBucketRateLimiter` for API quota management.
+5.  Add `rate_limit_chat_middleware` to an agent.
+6.  Use the convenience `with_rate_limit!` helper.
+7.  Compose both middlewares on the same agent.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the
+`qwen3:8b` model pulled:
+
+``` bash
+ollama pull qwen3:8b
+```
+
+## Setup
+
+``` julia
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## Why Resilience?
+
+When calling LLM APIs in production you will encounter:
+
+- **Rate limits** (HTTP 429) — the provider throttles your requests.
+- **Transient failures** (HTTP 500, 502, 503, 504) — temporary server
+  issues.
+- **Timeouts** — network or processing delays.
+
+Without resilience middleware, any of these cause your agent to fail
+immediately. With retry + rate limiting, your agent gracefully handles
+these situations.
+
+## Retry Configuration
+
+`RetryConfig` controls exponential backoff behaviour:
+
+``` julia
+config = RetryConfig(
+    max_retries = 3,          # up to 3 retry attempts
+    initial_delay = 1.0,      # 1 second before first retry
+    max_delay = 60.0,         # cap backoff at 60 seconds
+    multiplier = 2.0,         # double the delay each attempt
+    jitter = 0.1,             # ±10% random jitter
+)
+```
+
+    RetryConfig(3, 1.0, 60.0, 2.0, 0.1, Type[HTTP.Exceptions.StatusError], [429, 500, 502, 503, 504])
+
+The delay for attempt `n` is computed as:
+
+$$\text{delay} = \min(\text{initial\_delay} \times \text{multiplier}^n, \text{max\_delay}) \pm \text{jitter}$$
+
+Jitter prevents the “thundering herd” problem where many clients retry
+at the exact same time.
+
+## Creating Retry Middleware
+
+The `retry_chat_middleware` function returns a middleware closure that
+wraps every LLM call with retry logic:
+
+``` julia
+middleware = retry_chat_middleware(config)
+```
+
+    #retry_chat_middleware##0 (generic function with 1 method)
+
+You can add it directly to an agent’s middleware pipeline:
+
+``` julia
+client = OllamaChatClient(model = "qwen3:8b")
+agent = Agent(
+    name = "ResilientAgent",
+    instructions = "You are a helpful assistant.",
+    client = client,
+)
+push!(agent.chat_middlewares, middleware)
+```
+
+## Convenience: `with_retry!`
+
+The `with_retry!` helper does the same thing in a single call. It pushes
+the retry middleware onto the agent’s chat pipeline and returns the
+agent for chaining:
+
+``` julia
+agent = Agent(
+    name = "ResilientAgent",
+    instructions = "You are a helpful assistant.",
+    client = client,
+)
+with_retry!(agent, RetryConfig(max_retries = 5, initial_delay = 0.5))
+```
+
+## Token Bucket Rate Limiting
+
+The `TokenBucketRateLimiter` implements a classic token bucket algorithm
+for controlling request throughput:
+
+``` julia
+limiter = TokenBucketRateLimiter(
+    requests_per_second = 10.0,   # sustained throughput
+    burst = 10,                    # burst allowance
+)
+```
+
+    TokenBucketRateLimiter(10.0, 10.0, 10.0, 1.773613250450265e9, ReentrantLock())
+
+The bucket refills at `requests_per_second` and holds at most `burst`
+tokens. Each LLM call consumes one token. If no token is available, the
+middleware blocks until one becomes available (up to a configurable
+timeout).
+
+``` julia
+acquired = acquire!(limiter; timeout = 5.0)
+println("Token acquired: $acquired")
+```
+
+    Token acquired: true
+
+## Rate Limit Middleware
+
+Create rate-limiting middleware from a limiter:
+
+``` julia
+rl_middleware = rate_limit_chat_middleware(limiter; timeout = 30.0)
+```
+
+    #93 (generic function with 1 method)
+
+Or use the convenience helper which inserts it at the **front** of the
+pipeline (so rate limiting is checked before any other middleware):
+
+``` julia
+with_rate_limit!(agent, limiter; timeout = 30.0)
+```
+
+## Composing Both Middlewares
+
+For production use, combine retry and rate limiting on the same agent.
+Rate limiting goes first (front of pipeline) so we don’t waste retries
+on rate-limited requests:
+
+``` julia
+client = OllamaChatClient(model = "qwen3:8b")
+
+agent = Agent(
+    name = "ProductionAgent",
+    instructions = "You are a production-grade assistant.",
+    client = client,
+)
+
+# Add retry first (appends to end)
+with_retry!(agent, RetryConfig(
+    max_retries = 3,
+    initial_delay = 1.0,
+    multiplier = 2.0,
+))
+
+# Add rate limiting (prepends to front)
+limiter = TokenBucketRateLimiter(requests_per_second = 5.0, burst = 10)
+with_rate_limit!(agent, limiter)
+
+# The middleware pipeline is now: rate_limit → retry → LLM call
+println("Middlewares: ", length(agent.chat_middlewares))
+```
+
+**Expected output:**
+
+    Middlewares: 2
+
+## Running with Resilience
+
+``` julia
+response = run_agent(agent, "What is the speed of light?")
+println(response.text)
+```
+
+**Expected output:**
+
+    The speed of light in a vacuum is approximately 299,792,458 meters per second.
+
+If the LLM returns a transient error, the retry middleware will
+automatically retry up to 3 times with exponential backoff. The rate
+limiter ensures we don’t exceed 5 requests per second.
+
+## Which Errors Are Retryable?
+
+The `RetryConfig` decides which errors to retry based on:
+
+| Check                               | Retryable? |
+|-------------------------------------|------------|
+| HTTP 429 (Too Many Requests)        | ✅ Yes     |
+| HTTP 500, 502, 503, 504             | ✅ Yes     |
+| Connection timeout                  | ✅ Yes     |
+| `ChatClientError` with “rate limit” | ✅ Yes     |
+| HTTP 400 (Bad Request)              | ❌ No      |
+| HTTP 401 (Unauthorized)             | ❌ No      |
+| Validation errors                   | ❌ No      |
+
+Non-retryable errors are raised immediately without consuming retry
+attempts.
+
+## Summary
+
+| Component | Purpose | Method |
+|----|----|----|
+| `RetryConfig` | Backoff parameters | `RetryConfig(...)` |
+| `retry_chat_middleware` | Wrap calls with retry | Manual pipeline |
+| `with_retry!` | One-liner retry setup | Convenience |
+| `TokenBucketRateLimiter` | Throttle requests | `TokenBucketRateLimiter(...)` |
+| `rate_limit_chat_middleware` | Wrap calls with rate limit | Manual pipeline |
+| `with_rate_limit!` | One-liner rate limit setup | Convenience |
+
+**Tip:** Always add rate limiting *before* retry in the pipeline so you
+don’t burn retries on rate-limited requests.
+
+Next, see [12 — Telemetry](../12_telemetry/12_telemetry.qmd) to add
+observability and tracing to your agents.

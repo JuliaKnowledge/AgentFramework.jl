@@ -1,0 +1,312 @@
+# Middleware
+AgentFramework.jl
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [The Three-Layer Pipeline](#the-three-layer-pipeline)
+- [Creating the Agent](#creating-the-agent)
+- [Agent Middleware: Logging](#agent-middleware-logging)
+- [Chat Middleware: Timing](#chat-middleware-timing)
+- [Function Middleware: Tool Logging](#function-middleware-tool-logging)
+- [Running with Middleware](#running-with-middleware)
+- [The Onion Model](#the-onion-model)
+- [Practical Example: Security
+  Guardrail](#practical-example-security-guardrail)
+- [Composing a Full Pipeline](#composing-a-full-pipeline)
+- [Summary](#summary)
+
+## Overview
+
+Middleware lets you **intercept and modify** agent behaviour at three
+levels without changing the agent’s core logic. Think of it as a
+pipeline of wrappers that can inspect requests, transform responses, add
+logging, enforce policies, or measure performance.
+
+In this vignette you will learn how to:
+
+1.  Understand the three middleware layers: Agent, Chat, and Function.
+2.  Write a logging `AgentMiddleware` that runs before and after every
+    agent call.
+3.  Write a timing `ChatMiddleware` that measures LLM call duration.
+4.  Write a `FunctionMiddleware` that logs tool invocations.
+5.  Add middleware to an agent and compose a pipeline.
+6.  Understand the onion execution model.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the
+`qwen3:8b` model pulled:
+
+``` bash
+ollama pull qwen3:8b
+```
+
+## Setup
+
+``` julia
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## The Three-Layer Pipeline
+
+AgentFramework.jl has three middleware layers, each wrapping a different
+part of the request lifecycle:
+
+| Layer    | Context type                | Wraps                   |
+|----------|-----------------------------|-------------------------|
+| Agent    | `AgentContext`              | Entire `run_agent` call |
+| Chat     | `ChatContext`               | Each LLM API request    |
+| Function | `FunctionInvocationContext` | Each tool invocation    |
+
+Each middleware is a function `(context, next) -> result`. Call
+`next(context)` to continue the pipeline, or return early to
+short-circuit it.
+
+## Creating the Agent
+
+Let’s start with a simple agent that has a tool, so we can demonstrate
+all three middleware layers:
+
+``` julia
+client = OllamaChatClient(model = "qwen3:8b")
+
+@tool function get_population(city::String)
+    "Get the population of a city."
+    populations = Dict(
+        "Paris" => "2.1 million",
+        "London" => "8.8 million",
+        "Tokyo" => "14 million",
+    )
+    return get(populations, city, "Unknown")
+end
+
+agent = Agent(
+    name = "CityBot",
+    instructions = "You are a helpful city information assistant. Use the get_population tool when asked about population.",
+    client = client,
+    tools = [get_population],
+)
+```
+
+## Agent Middleware: Logging
+
+Agent middleware wraps the entire `run_agent` call. It receives an
+`AgentContext` with the agent, input messages, session, and options:
+
+``` julia
+function logging_agent_middleware(ctx::AgentContext, next)
+    agent_name = ctx.agent.name
+    n_messages = length(ctx.messages)
+    println("[AgentMW] Starting $(agent_name) with $(n_messages) message(s)")
+
+    result = next(ctx)  # run the agent
+
+    println("[AgentMW] $(agent_name) completed")
+    return result
+end
+```
+
+    logging_agent_middleware (generic function with 1 method)
+
+Add it to the agent’s middleware list:
+
+``` julia
+push!(agent.agent_middlewares, logging_agent_middleware)
+```
+
+## Chat Middleware: Timing
+
+Chat middleware wraps each individual call to the LLM. It receives a
+`ChatContext` with the messages and options being sent:
+
+``` julia
+function timing_chat_middleware(ctx::ChatContext, next)
+    n_msgs = length(ctx.messages)
+    println("  [ChatMW] Sending $(n_msgs) messages to LLM...")
+
+    start_time = time()
+    result = next(ctx)  # call the LLM
+    elapsed = time() - start_time
+
+    println("  [ChatMW] LLM responded in $(round(elapsed; digits=2))s")
+    return result
+end
+```
+
+    timing_chat_middleware (generic function with 1 method)
+
+``` julia
+push!(agent.chat_middlewares, timing_chat_middleware)
+```
+
+## Function Middleware: Tool Logging
+
+Function middleware wraps each tool invocation. It receives a
+`FunctionInvocationContext` with the tool, parsed arguments, and call
+ID:
+
+``` julia
+function tool_logging_middleware(ctx::FunctionInvocationContext, next)
+    tool_name = ctx.tool.name
+    args = ctx.arguments
+    println("    [FuncMW] Calling tool: $(tool_name) with args: $(args)")
+
+    result = next(ctx)  # invoke the tool
+
+    println("    [FuncMW] Tool $(tool_name) returned: $(ctx.result)")
+    return result
+end
+```
+
+    tool_logging_middleware (generic function with 1 method)
+
+``` julia
+push!(agent.function_middlewares, tool_logging_middleware)
+```
+
+## Running with Middleware
+
+Now every call flows through our three middleware layers:
+
+``` julia
+response = run_agent(agent, "What is the population of Paris?")
+println("\nFinal answer: ", response.text)
+```
+
+**Expected output:**
+
+    [AgentMW] Starting CityBot with 1 message(s)
+      [ChatMW] Sending 2 messages to LLM...
+      [ChatMW] LLM responded in 1.23s
+        [FuncMW] Calling tool: get_population with args: Dict("city" => "Paris")
+        [FuncMW] Tool get_population returned: 2.1 million
+      [ChatMW] Sending 4 messages to LLM...
+      [ChatMW] LLM responded in 0.87s
+    [AgentMW] CityBot completed
+
+    Final answer: The population of Paris is approximately 2.1 million.
+
+Notice the Chat middleware fires **twice** — once for the initial LLM
+call (which returns a tool call), and again after the tool result is fed
+back.
+
+## The Onion Model
+
+Multiple middleware execute in an onion (nested) pattern — the first
+added is the outermost layer:
+
+``` julia
+agent2 = Agent(
+    name = "CityBot",
+    instructions = "You are a helpful city information assistant.",
+    client = client,
+    agent_middlewares = [
+        (ctx, next) -> (println("[Outer] Before"); r = next(ctx); println("[Outer] After"); r),
+        (ctx, next) -> (println("  [Inner] Before"); r = next(ctx); println("  [Inner] After"); r),
+    ],
+)
+```
+
+``` julia
+response = run_agent(agent2, "Hello!")
+```
+
+**Expected output** — outer wraps inner wraps the core agent execution:
+
+    [Outer] Before
+      [Inner] Before
+      [Inner] After
+    [Outer] After
+
+## Practical Example: Security Guardrail
+
+Middleware can short-circuit the pipeline by *not* calling `next`:
+
+``` julia
+function security_middleware(ctx::AgentContext, next)
+    for msg in ctx.messages
+        text = lowercase(get_text(msg))
+        if contains(text, "password") || contains(text, "secret")
+            println("[Security] Blocked: sensitive content detected")
+            ctx.result = AgentResponse(
+                messages = [Message(:assistant, "I cannot process requests containing sensitive information.")],
+            )
+            return ctx.result
+        end
+    end
+    return next(ctx)
+end
+```
+
+    security_middleware (generic function with 1 method)
+
+``` julia
+secure_agent = Agent(
+    name = "SecureBot",
+    instructions = "You are a helpful assistant.",
+    client = client,
+    agent_middlewares = [security_middleware],
+)
+
+response = run_agent(secure_agent, "What is my password?")
+println(response.text)
+
+response = run_agent(secure_agent, "What is the capital of France?")
+println(response.text)
+```
+
+**Expected output:**
+
+    [Security] Blocked: sensitive content detected
+    I cannot process requests containing sensitive information.
+    The capital of France is Paris.
+
+## Composing a Full Pipeline
+
+Combine all three layers for comprehensive observability:
+
+``` julia
+observable_agent = Agent(
+    name = "ObservableBot",
+    instructions = "You are a helpful assistant. Use tools when needed.",
+    client = client,
+    tools = [get_population],
+    agent_middlewares = [logging_agent_middleware],
+    chat_middlewares = [timing_chat_middleware],
+    function_middlewares = [tool_logging_middleware],
+)
+
+response = run_agent(observable_agent, "How many people live in Tokyo?")
+println("\nAnswer: ", response.text)
+```
+
+**Expected output:**
+
+    [AgentMW] Starting ObservableBot with 1 message(s)
+      [ChatMW] Sending 2 messages to LLM...
+      [ChatMW] LLM responded in 1.05s
+        [FuncMW] Calling tool: get_population with args: Dict("city" => "Tokyo")
+        [FuncMW] Tool get_population returned: 14 million
+      [ChatMW] Sending 4 messages to LLM...
+      [ChatMW] LLM responded in 0.92s
+    [AgentMW] ObservableBot completed
+
+    Answer: The population of Tokyo is approximately 14 million.
+
+## Summary
+
+| Middleware layer | Context type | Use cases |
+|----|----|----|
+| **Agent** (`agent_middlewares`) | `AgentContext` | Logging, auth, guardrails, caching |
+| **Chat** (`chat_middlewares`) | `ChatContext` | Timing, token tracking, retry logic |
+| **Function** (`function_middlewares`) | `FunctionInvocationContext` | Tool logging, validation, sandboxing |
+
+The middleware signature is always `(context, next) -> result`. Call
+`next(context)` to continue the pipeline, or return early to
+short-circuit it.
+
+Next, see [07 — Memory](../07_memory/07_memory.qmd) to learn how agents
+can remember information across conversations.

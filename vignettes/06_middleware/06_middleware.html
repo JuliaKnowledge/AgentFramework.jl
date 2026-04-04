@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="AgentFramework.jl">
+
+<title>Middleware</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="06_middleware_files/libs/clipboard/clipboard.min.js"></script>
+<script src="06_middleware_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="06_middleware_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="06_middleware_files/libs/quarto-html/popper.min.js"></script>
+<script src="06_middleware_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="06_middleware_files/libs/quarto-html/anchor.min.js"></script>
+<link href="06_middleware_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="06_middleware_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="06_middleware_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="06_middleware_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="06_middleware_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#the-three-layer-pipeline" id="toc-the-three-layer-pipeline" class="nav-link" data-scroll-target="#the-three-layer-pipeline">The Three-Layer Pipeline</a></li>
+  <li><a href="#creating-the-agent" id="toc-creating-the-agent" class="nav-link" data-scroll-target="#creating-the-agent">Creating the Agent</a></li>
+  <li><a href="#agent-middleware-logging" id="toc-agent-middleware-logging" class="nav-link" data-scroll-target="#agent-middleware-logging">Agent Middleware: Logging</a></li>
+  <li><a href="#chat-middleware-timing" id="toc-chat-middleware-timing" class="nav-link" data-scroll-target="#chat-middleware-timing">Chat Middleware: Timing</a></li>
+  <li><a href="#function-middleware-tool-logging" id="toc-function-middleware-tool-logging" class="nav-link" data-scroll-target="#function-middleware-tool-logging">Function Middleware: Tool Logging</a></li>
+  <li><a href="#running-with-middleware" id="toc-running-with-middleware" class="nav-link" data-scroll-target="#running-with-middleware">Running with Middleware</a></li>
+  <li><a href="#the-onion-model" id="toc-the-onion-model" class="nav-link" data-scroll-target="#the-onion-model">The Onion Model</a></li>
+  <li><a href="#practical-example-security-guardrail" id="toc-practical-example-security-guardrail" class="nav-link" data-scroll-target="#practical-example-security-guardrail">Practical Example: Security Guardrail</a></li>
+  <li><a href="#composing-a-full-pipeline" id="toc-composing-a-full-pipeline" class="nav-link" data-scroll-target="#composing-a-full-pipeline">Composing a Full Pipeline</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="06_middleware.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="06_middleware.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Middleware</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>AgentFramework.jl </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Middleware lets you <strong>intercept and modify</strong> agent behaviour at three levels without changing the agent’s core logic. Think of it as a pipeline of wrappers that can inspect requests, transform responses, add logging, enforce policies, or measure performance.</p>
+<p>In this vignette you will learn how to:</p>
+<ol type="1">
+<li>Understand the three middleware layers: Agent, Chat, and Function.</li>
+<li>Write a logging <code>AgentMiddleware</code> that runs before and after every agent call.</li>
+<li>Write a timing <code>ChatMiddleware</code> that measures LLM call duration.</li>
+<li>Write a <code>FunctionMiddleware</code> that logs tool invocations.</li>
+<li>Add middleware to an agent and compose a pipeline.</li>
+<li>Understand the onion execution model.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="the-three-layer-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="the-three-layer-pipeline">The Three-Layer Pipeline</h2>
+<p>AgentFramework.jl has three middleware layers, each wrapping a different part of the request lifecycle:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Layer</th>
+<th>Context type</th>
+<th>Wraps</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Agent</td>
+<td><code>AgentContext</code></td>
+<td>Entire <code>run_agent</code> call</td>
+</tr>
+<tr class="even">
+<td>Chat</td>
+<td><code>ChatContext</code></td>
+<td>Each LLM API request</td>
+</tr>
+<tr class="odd">
+<td>Function</td>
+<td><code>FunctionInvocationContext</code></td>
+<td>Each tool invocation</td>
+</tr>
+</tbody>
+</table>
+<p>Each middleware is a function <code>(context, next) -&gt; result</code>. Call <code>next(context)</code> to continue the pipeline, or return early to short-circuit it.</p>
+</section>
+<section id="creating-the-agent" class="level2">
+<h2 class="anchored" data-anchor-id="creating-the-agent">Creating the Agent</h2>
+<p>Let’s start with a simple agent that has a tool, so we can demonstrate all three middleware layers:</p>
+<div id="4" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="pp">@tool</span> <span class="kw">function</span> <span class="fu">get_population</span>(city<span class="op">::</span><span class="dt">String</span>)</span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Get the population of a city."</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>    populations <span class="op">=</span> <span class="fu">Dict</span>(</span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Paris"</span> <span class="op">=&gt;</span> <span class="st">"2.1 million"</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"London"</span> <span class="op">=&gt;</span> <span class="st">"8.8 million"</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Tokyo"</span> <span class="op">=&gt;</span> <span class="st">"14 million"</span>,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">get</span>(populations, city, <span class="st">"Unknown"</span>)</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"CityBot"</span>,</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful city information assistant. Use the get_population tool when asked about population."</span>,</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>    tools <span class="op">=</span> [get_population],</span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="agent-middleware-logging" class="level2">
+<h2 class="anchored" data-anchor-id="agent-middleware-logging">Agent Middleware: Logging</h2>
+<p>Agent middleware wraps the entire <code>run_agent</code> call. It receives an <code>AgentContext</code> with the agent, input messages, session, and options:</p>
+<div id="6" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">logging_agent_middleware</span>(ctx<span class="op">::</span><span class="dt">AgentContext</span>, next)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    agent_name <span class="op">=</span> ctx.agent.name</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    n_messages <span class="op">=</span> <span class="fu">length</span>(ctx.messages)</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"[AgentMW] Starting </span><span class="sc">$</span>(agent_name)<span class="st"> with </span><span class="sc">$</span>(n_messages)<span class="st"> message(s)"</span>)</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="fu">next</span>(ctx)  <span class="co"># run the agent</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"[AgentMW] </span><span class="sc">$</span>(agent_name)<span class="st"> completed"</span>)</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>logging_agent_middleware (generic function with 1 method)</code></pre>
+</div>
+</div>
+<p>Add it to the agent’s middleware list:</p>
+<div id="8" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a><span class="fu">push!</span>(agent.agent_middlewares, logging_agent_middleware)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="chat-middleware-timing" class="level2">
+<h2 class="anchored" data-anchor-id="chat-middleware-timing">Chat Middleware: Timing</h2>
+<p>Chat middleware wraps each individual call to the LLM. It receives a <code>ChatContext</code> with the messages and options being sent:</p>
+<div id="10" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">timing_chat_middleware</span>(ctx<span class="op">::</span><span class="dt">ChatContext</span>, next)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    n_msgs <span class="op">=</span> <span class="fu">length</span>(ctx.messages)</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  [ChatMW] Sending </span><span class="sc">$</span>(n_msgs)<span class="st"> messages to LLM..."</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>    start_time <span class="op">=</span> <span class="fu">time</span>()</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="fu">next</span>(ctx)  <span class="co"># call the LLM</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>    elapsed <span class="op">=</span> <span class="fu">time</span>() <span class="op">-</span> start_time</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  [ChatMW] LLM responded in </span><span class="sc">$</span>(<span class="fu">round</span>(elapsed; digits<span class="op">=</span><span class="fl">2</span>))<span class="st">s"</span>)</span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>timing_chat_middleware (generic function with 1 method)</code></pre>
+</div>
+</div>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a><span class="fu">push!</span>(agent.chat_middlewares, timing_chat_middleware)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="function-middleware-tool-logging" class="level2">
+<h2 class="anchored" data-anchor-id="function-middleware-tool-logging">Function Middleware: Tool Logging</h2>
+<p>Function middleware wraps each tool invocation. It receives a <code>FunctionInvocationContext</code> with the tool, parsed arguments, and call ID:</p>
+<div id="14" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">tool_logging_middleware</span>(ctx<span class="op">::</span><span class="dt">FunctionInvocationContext</span>, next)</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    tool_name <span class="op">=</span> ctx.tool.name</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    args <span class="op">=</span> ctx.arguments</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"    [FuncMW] Calling tool: </span><span class="sc">$</span>(tool_name)<span class="st"> with args: </span><span class="sc">$</span>(args)<span class="st">"</span>)</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    result <span class="op">=</span> <span class="fu">next</span>(ctx)  <span class="co"># invoke the tool</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"    [FuncMW] Tool </span><span class="sc">$</span>(tool_name)<span class="st"> returned: </span><span class="sc">$</span>(ctx.result)<span class="st">"</span>)</span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> result</span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>tool_logging_middleware (generic function with 1 method)</code></pre>
+</div>
+</div>
+<div id="16" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="fu">push!</span>(agent.function_middlewares, tool_logging_middleware)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="running-with-middleware" class="level2">
+<h2 class="anchored" data-anchor-id="running-with-middleware">Running with Middleware</h2>
+<p>Now every call flows through our three middleware layers:</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"What is the population of Paris?"</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Final answer: "</span>, response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>[AgentMW] Starting CityBot with 1 message(s)
+  [ChatMW] Sending 2 messages to LLM...
+  [ChatMW] LLM responded in 1.23s
+    [FuncMW] Calling tool: get_population with args: Dict("city" =&gt; "Paris")
+    [FuncMW] Tool get_population returned: 2.1 million
+  [ChatMW] Sending 4 messages to LLM...
+  [ChatMW] LLM responded in 0.87s
+[AgentMW] CityBot completed
+
+Final answer: The population of Paris is approximately 2.1 million.</code></pre>
+<p>Notice the Chat middleware fires <strong>twice</strong> — once for the initial LLM call (which returns a tool call), and again after the tool result is fed back.</p>
+</section>
+<section id="the-onion-model" class="level2">
+<h2 class="anchored" data-anchor-id="the-onion-model">The Onion Model</h2>
+<p>Multiple middleware execute in an onion (nested) pattern — the first added is the outermost layer:</p>
+<div id="20" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>agent2 <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"CityBot"</span>,</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful city information assistant."</span>,</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    agent_middlewares <span class="op">=</span> [</span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>        (ctx, next) <span class="op">-&gt;</span> (<span class="fu">println</span>(<span class="st">"[Outer] Before"</span>); r <span class="op">=</span> <span class="fu">next</span>(ctx); <span class="fu">println</span>(<span class="st">"[Outer] After"</span>); r),</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>        (ctx, next) <span class="op">-&gt;</span> (<span class="fu">println</span>(<span class="st">"  [Inner] Before"</span>); r <span class="op">=</span> <span class="fu">next</span>(ctx); <span class="fu">println</span>(<span class="st">"  [Inner] After"</span>); r),</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    ],</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div id="22" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent2, <span class="st">"Hello!"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output</strong> — outer wraps inner wraps the core agent execution:</p>
+<pre><code>[Outer] Before
+  [Inner] Before
+  [Inner] After
+[Outer] After</code></pre>
+</section>
+<section id="practical-example-security-guardrail" class="level2">
+<h2 class="anchored" data-anchor-id="practical-example-security-guardrail">Practical Example: Security Guardrail</h2>
+<p>Middleware can short-circuit the pipeline by <em>not</em> calling <code>next</code>:</p>
+<div id="24" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">security_middleware</span>(ctx<span class="op">::</span><span class="dt">AgentContext</span>, next)</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> msg <span class="kw">in</span> ctx.messages</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>        text <span class="op">=</span> <span class="fu">lowercase</span>(<span class="fu">get_text</span>(msg))</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="fu">contains</span>(text, <span class="st">"password"</span>) <span class="op">||</span> <span class="fu">contains</span>(text, <span class="st">"secret"</span>)</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>            <span class="fu">println</span>(<span class="st">"[Security] Blocked: sensitive content detected"</span>)</span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a>            ctx.result <span class="op">=</span> <span class="fu">AgentResponse</span>(</span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a>                messages <span class="op">=</span> [<span class="fu">Message</span>(<span class="op">:</span>assistant, <span class="st">"I cannot process requests containing sensitive information."</span>)],</span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a>            )</span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a>            <span class="cf">return</span> ctx.result</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">next</span>(ctx)</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>security_middleware (generic function with 1 method)</code></pre>
+</div>
+</div>
+<div id="26" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a>secure_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"SecureBot"</span>,</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful assistant."</span>,</span>
+<span id="cb20-4"><a href="#cb20-4" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb20-5"><a href="#cb20-5" aria-hidden="true" tabindex="-1"></a>    agent_middlewares <span class="op">=</span> [security_middleware],</span>
+<span id="cb20-6"><a href="#cb20-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb20-7"><a href="#cb20-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-8"><a href="#cb20-8" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(secure_agent, <span class="st">"What is my password?"</span>)</span>
+<span id="cb20-9"><a href="#cb20-9" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span>
+<span id="cb20-10"><a href="#cb20-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb20-11"><a href="#cb20-11" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(secure_agent, <span class="st">"What is the capital of France?"</span>)</span>
+<span id="cb20-12"><a href="#cb20-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>[Security] Blocked: sensitive content detected
+I cannot process requests containing sensitive information.
+The capital of France is Paris.</code></pre>
+</section>
+<section id="composing-a-full-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="composing-a-full-pipeline">Composing a Full Pipeline</h2>
+<p>Combine all three layers for comprehensive observability:</p>
+<div id="28" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>observable_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"ObservableBot"</span>,</span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful assistant. Use tools when needed."</span>,</span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>    tools <span class="op">=</span> [get_population],</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>    agent_middlewares <span class="op">=</span> [logging_agent_middleware],</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    chat_middlewares <span class="op">=</span> [timing_chat_middleware],</span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    function_middlewares <span class="op">=</span> [tool_logging_middleware],</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(observable_agent, <span class="st">"How many people live in Tokyo?"</span>)</span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Answer: "</span>, response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>[AgentMW] Starting ObservableBot with 1 message(s)
+  [ChatMW] Sending 2 messages to LLM...
+  [ChatMW] LLM responded in 1.05s
+    [FuncMW] Calling tool: get_population with args: Dict("city" =&gt; "Tokyo")
+    [FuncMW] Tool get_population returned: 14 million
+  [ChatMW] Sending 4 messages to LLM...
+  [ChatMW] LLM responded in 0.92s
+[AgentMW] ObservableBot completed
+
+Answer: The population of Tokyo is approximately 14 million.</code></pre>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 41%">
+<col style="width: 31%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Middleware layer</th>
+<th>Context type</th>
+<th>Use cases</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Agent</strong> (<code>agent_middlewares</code>)</td>
+<td><code>AgentContext</code></td>
+<td>Logging, auth, guardrails, caching</td>
+</tr>
+<tr class="even">
+<td><strong>Chat</strong> (<code>chat_middlewares</code>)</td>
+<td><code>ChatContext</code></td>
+<td>Timing, token tracking, retry logic</td>
+</tr>
+<tr class="odd">
+<td><strong>Function</strong> (<code>function_middlewares</code>)</td>
+<td><code>FunctionInvocationContext</code></td>
+<td>Tool logging, validation, sandboxing</td>
+</tr>
+</tbody>
+</table>
+<p>The middleware signature is always <code>(context, next) -&gt; result</code>. Call <code>next(context)</code> to continue the pipeline, or return early to short-circuit it.</p>
+<p>Next, see <a href="../07_memory/07_memory.qmd">07 — Memory</a> to learn how agents can remember information across conversations.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

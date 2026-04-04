@@ -1,0 +1,17 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <ManagePackageVersionsCentrally>false</ManagePackageVersionsCentrally>
+    <NoWarn>$(NoWarn);MEAI001;MAAI001</NoWarn>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="OllamaSharp" Version="5.4.8" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="../../../../agent-framework/dotnet/src/Microsoft.Agents.AI/Microsoft.Agents.AI.csproj" />
+    <ProjectReference Include="../../../../agent-framework/dotnet/src/Microsoft.Agents.AI.Workflows/Microsoft.Agents.AI.Workflows.csproj" />
+  </ItemGroup>
+</Project>

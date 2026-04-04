@@ -1,0 +1,1789 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="AgentFramework.jl">
+
+<title>Structured GraphRAG: From Tabular Data to Knowledge Graphs</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="14_graph_rag_structured_files/libs/clipboard/clipboard.min.js"></script>
+<script src="14_graph_rag_structured_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="14_graph_rag_structured_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="14_graph_rag_structured_files/libs/quarto-html/popper.min.js"></script>
+<script src="14_graph_rag_structured_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="14_graph_rag_structured_files/libs/quarto-html/anchor.min.js"></script>
+<link href="14_graph_rag_structured_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="14_graph_rag_structured_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="14_graph_rag_structured_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="14_graph_rag_structured_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="14_graph_rag_structured_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#the-dataset-jaguars-of-the-americas" id="toc-the-dataset-jaguars-of-the-americas" class="nav-link" data-scroll-target="#the-dataset-jaguars-of-the-americas">The Dataset: Jaguars of the Americas</a></li>
+  <li><a href="#step-1-loading-and-preprocessing-the-csv" id="toc-step-1-loading-and-preprocessing-the-csv" class="nav-link" data-scroll-target="#step-1-loading-and-preprocessing-the-csv">Step 1: Loading and Preprocessing the CSV</a></li>
+  <li><a href="#step-2-loading-the-ontology" id="toc-step-2-loading-the-ontology" class="nav-link" data-scroll-target="#step-2-loading-the-ontology">Step 2: Loading the Ontology</a></li>
+  <li><a href="#step-3-mapping-tabular-data-to-rdf" id="toc-step-3-mapping-tabular-data-to-rdf" class="nav-link" data-scroll-target="#step-3-mapping-tabular-data-to-rdf">Step 3: Mapping Tabular Data to RDF</a></li>
+  <li><a href="#step-4-querying-the-knowledge-graph" id="toc-step-4-querying-the-knowledge-graph" class="nav-link" data-scroll-target="#step-4-querying-the-knowledge-graph">Step 4: Querying the Knowledge Graph</a></li>
+  <li><a href="#step-5-retrieval-functions" id="toc-step-5-retrieval-functions" class="nav-link" data-scroll-target="#step-5-retrieval-functions">Step 5: Retrieval Functions</a></li>
+  <li><a href="#step-6-structured-graphrag-pipeline" id="toc-step-6-structured-graphrag-pipeline" class="nav-link" data-scroll-target="#step-6-structured-graphrag-pipeline">Step 6: Structured GraphRAG Pipeline</a></li>
+  <li><a href="#step-7-asking-questions" id="toc-step-7-asking-questions" class="nav-link" data-scroll-target="#step-7-asking-questions">Step 7: Asking Questions</a>
+  <ul class="collapse">
+  <li><a href="#individual-jaguar-lookup" id="toc-individual-jaguar-lookup" class="nav-link" data-scroll-target="#individual-jaguar-lookup">Individual jaguar lookup</a></li>
+  <li><a href="#location-based-query" id="toc-location-based-query" class="nav-link" data-scroll-target="#location-based-query">Location-based query</a></li>
+  <li><a href="#conservation-status-query" id="toc-conservation-status-query" class="nav-link" data-scroll-target="#conservation-status-query">Conservation status query</a></li>
+  </ul></li>
+  <li><a href="#step-8-structured-graphrag-vs-plain-llm" id="toc-step-8-structured-graphrag-vs-plain-llm" class="nav-link" data-scroll-target="#step-8-structured-graphrag-vs-plain-llm">Step 8: Structured GraphRAG vs Plain LLM</a></li>
+  <li><a href="#step-9-graph-statistics" id="toc-step-9-graph-statistics" class="nav-link" data-scroll-target="#step-9-graph-statistics">Step 9: Graph Statistics</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a>
+  <ul class="collapse">
+  <li><a href="#key-takeaways" id="toc-key-takeaways" class="nav-link" data-scroll-target="#key-takeaways">Key Takeaways</a></li>
+  </ul></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="14_graph_rag_structured.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="14_graph_rag_structured.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Structured GraphRAG: From Tabular Data to Knowledge Graphs</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>AgentFramework.jl </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Standard RAG takes structured data (like a CSV), turns it into text chunks, embeds it, and searches for “similar” chunks — destroying the exact relationships in your data. <strong>Structured GraphRAG</strong> takes a different approach: map tabular data directly onto an RDF knowledge graph using an ontology, preserving every relationship with 100% fidelity.</p>
+<p>In this vignette, you will learn how to:</p>
+<ul>
+<li>Load structured tabular data (CSV) and map it to an RDF knowledge graph</li>
+<li>Use an OWL ontology to give semantic meaning to columns and relationships</li>
+<li>Query the knowledge graph with SPARQL</li>
+<li>Build a programmatic GraphRAG pipeline that retrieves graph facts and generates LLM answers</li>
+<li>Compare structured GraphRAG with plain LLM responses</li>
+</ul>
+<p>This follows the same approach as the <a href="https://github.com/microsoft/agent-framework">Agent Framework <code>graph_RAG_structured</code> sample</a>, ported to Julia using RDFLib.jl.</p>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<ul>
+<li><p><strong>Ollama</strong> running locally:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull gemma3</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div></li>
+</ul>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>, <span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">RDFLib</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">DelimitedFiles</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="the-dataset-jaguars-of-the-americas" class="level2">
+<h2 class="anchored" data-anchor-id="the-dataset-jaguars-of-the-americas">The Dataset: Jaguars of the Americas</h2>
+<p>Our dataset tracks individual jaguars across the Americas — their locations, monitoring organizations, threats, and status. This is real-world structured data with multi-valued fields (semicolon-separated), optional columns, and mixed data types.</p>
+<div id="4" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>csv_path <span class="op">=</span> <span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">"data"</span>, <span class="st">"jaguars.csv"</span>)</span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">read</span>(csv_path, <span class="dt">String</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>jaguar_id,name,gender,location,monitoring_org,first_sighted,is_killed,cause_of_death,identification_mark,threats,monitoring_technique,status_notes
+ElJefe,El Jefe,Male,WhetstoneMountains;SantaRitaMountains;Sonora,UnivOfArizona;ConservationCATalyst;NorthernJaguarProject,2011-11-19,false,,Unique spot patterns,,CameraTrap;ScatDetection,
+MachoB,Macho B,Male,BaboquivariMountains,,1996-01-01,true,Euthanasia following kidney failure caused by capture,Mark resembling Betty Boop,SnareTrap,GPSTracking,
+Sombra,Sombra,Male,DosCabezasMountains;ChiricahuaMountains,,2016-11-01,false,,,,CameraTrap;GPSTracking,
+Yooko,Yo'oko,Male,HuachucaMountains;Sonora,,,true,Killed by mountain lion hunter,,Poaching,,
+Cochise,Cochise,Male,HuachucaMountains,,2023-12-20,false,,,,CameraTrap,
+Asa,Asa,Female,Pantanal,PantanalJaguarProject,2008-03-15,false,,Light colored coat with widely spaced rosettes,,,
+Mick,Mick,Male,Pantanal,PantanalJaguarProject,2015-06-22,false,,Large male with prominent rosettes,,,
+Ferinha,Ferinha,Female,Pantanal,PantanalJaguarProject,2012-09-10,false,,Small female with dense rosette pattern,,,
+OshadNukudam,O:ṣhad Ñu:kudam,,Arizona,,,false,,,,,
+Mariposa,Mariposa,Female,HatoLaAurora,PantheraColombia,2009-01-01,false,,,,,
+Cayenita,Cayenita,Female,HatoLaAurora,,,false,,,,,
+Xama,Xamã,Male,AmazonRainforest,,,false,,,WildfireThreat,GPSTracking,Orphaned;Rehabilitated;Released</code></pre>
+</div>
+</div>
+</section>
+<section id="step-1-loading-and-preprocessing-the-csv" class="level2">
+<h2 class="anchored" data-anchor-id="step-1-loading-and-preprocessing-the-csv">Step 1: Loading and Preprocessing the CSV</h2>
+<p>We parse the CSV into a structured format, handling multi-valued fields by splitting on semicolons.</p>
+<div id="6" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Parse CSV manually to handle the complex structure</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>lines <span class="op">=</span> <span class="fu">split</span>(<span class="fu">strip</span>(<span class="fu">read</span>(csv_path, <span class="dt">String</span>)), <span class="ch">'\n'</span>)</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>header <span class="op">=</span> [<span class="fu">strip</span>(h) for h <span class="kw">in</span> <span class="fu">split</span>(lines[<span class="fl">1</span>], <span class="ch">','</span>)]</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Columns: "</span>, <span class="fu">join</span>(header, <span class="st">", "</span>))</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Parse each row into a Dict</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>records <span class="op">=</span> <span class="dt">Dict</span>{<span class="dt">String</span>,<span class="dt">String</span>}[]</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> line <span class="kw">in</span> lines[<span class="fl">2</span><span class="op">:</span><span class="kw">end</span>]</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Simple CSV parsing (handles our data which has no quoted commas)</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    fields <span class="op">=</span> <span class="fu">split</span>(line, <span class="ch">','</span>)</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    row <span class="op">=</span> <span class="fu">Dict</span><span class="dt">{String,String}</span>()</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> (i, col) <span class="kw">in</span> <span class="fu">enumerate</span>(header)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a>        val <span class="op">=</span> i <span class="op">&lt;=</span> <span class="fu">length</span>(fields) ? <span class="fu">strip</span>(fields[i]) <span class="op">:</span> <span class="st">""</span></span>
+<span id="cb5-14"><a href="#cb5-14" aria-hidden="true" tabindex="-1"></a>        row[col] <span class="op">=</span> val</span>
+<span id="cb5-15"><a href="#cb5-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb5-16"><a href="#cb5-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">push!</span>(records, row)</span>
+<span id="cb5-17"><a href="#cb5-17" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb5-18"><a href="#cb5-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-19"><a href="#cb5-19" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Loaded </span><span class="sc">$</span>(<span class="fu">length</span>(records))<span class="st"> jaguar records"</span>)</span>
+<span id="cb5-20"><a href="#cb5-20" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> records[<span class="fl">1</span><span class="op">:</span><span class="fl">3</span>]</span>
+<span id="cb5-21"><a href="#cb5-21" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  </span><span class="sc">$</span>(r[<span class="st">"name"</span>])<span class="st"> (</span><span class="sc">$</span>(r[<span class="st">"gender"</span>])<span class="st">) — </span><span class="sc">$</span>(r[<span class="st">"location"</span>])<span class="st">"</span>)</span>
+<span id="cb5-22"><a href="#cb5-22" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Columns: jaguar_id, name, gender, location, monitoring_org, first_sighted, is_killed, cause_of_death, identification_mark, threats, monitoring_technique, status_notes
+
+Loaded 12 jaguar records
+  El Jefe (Male) — WhetstoneMountains;SantaRitaMountains;Sonora
+  Macho B (Male) — BaboquivariMountains
+  Sombra (Male) — DosCabezasMountains;ChiricahuaMountains</code></pre>
+</div>
+</div>
+</section>
+<section id="step-2-loading-the-ontology" class="level2">
+<h2 class="anchored" data-anchor-id="step-2-loading-the-ontology">Step 2: Loading the Ontology</h2>
+<p>The ontology defines the semantic schema — what classes exist (Jaguar, Location, ConservationOrganization, Threat, etc.) and how they relate. This is what makes our graph meaningful rather than just a bag of triples.</p>
+<div id="8" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>ontology_path <span class="op">=</span> <span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">"data"</span>, <span class="st">"jaguar_ontology.ttl"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>kg <span class="op">=</span> <span class="fu">RDFGraph</span>()</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Load the OWL ontology</span></span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>ontology_ttl <span class="op">=</span> <span class="fu">read</span>(ontology_path, <span class="dt">String</span>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a><span class="fu">parse_rdf!</span>(kg, ontology_ttl, <span class="fu">TurtleFormat</span>())</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Ontology loaded: </span><span class="sc">$</span>(<span class="fu">length</span>(kg))<span class="st"> triples"</span>)</span>
+<span id="cb7-9"><a href="#cb7-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-10"><a href="#cb7-10" aria-hidden="true" tabindex="-1"></a><span class="co"># Show the class hierarchy</span></span>
+<span id="cb7-11"><a href="#cb7-11" aria-hidden="true" tabindex="-1"></a>classes <span class="op">=</span> <span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb7-12"><a href="#cb7-12" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX owl: &lt;http://www.w3.org/2002/07/owl#&gt;</span></span>
+<span id="cb7-13"><a href="#cb7-13" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb7-14"><a href="#cb7-14" aria-hidden="true" tabindex="-1"></a><span class="st">SELECT ?class ?parent WHERE {</span></span>
+<span id="cb7-15"><a href="#cb7-15" aria-hidden="true" tabindex="-1"></a><span class="st">    ?class a owl:Class .</span></span>
+<span id="cb7-16"><a href="#cb7-16" aria-hidden="true" tabindex="-1"></a><span class="st">    OPTIONAL { ?class rdfs:subClassOf ?parent }</span></span>
+<span id="cb7-17"><a href="#cb7-17" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb7-18"><a href="#cb7-18" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>)</span>
+<span id="cb7-19"><a href="#cb7-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb7-20"><a href="#cb7-20" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">Ontology classes:"</span>)</span>
+<span id="cb7-21"><a href="#cb7-21" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> classes</span>
+<span id="cb7-22"><a href="#cb7-22" aria-hidden="true" tabindex="-1"></a>    cls <span class="op">=</span> <span class="fu">split</span>(<span class="fu">string</span>(r[<span class="st">"class"</span>]), <span class="st">"#"</span>)[<span class="kw">end</span>]</span>
+<span id="cb7-23"><a href="#cb7-23" aria-hidden="true" tabindex="-1"></a>    parent <span class="op">=</span> <span class="fu">haskey</span>(r, <span class="st">"parent"</span>) ? <span class="st">" → "</span> <span class="op">*</span> <span class="fu">split</span>(<span class="fu">string</span>(r[<span class="st">"parent"</span>]), <span class="st">"#"</span>)[<span class="kw">end</span>] <span class="op">:</span> <span class="st">""</span></span>
+<span id="cb7-24"><a href="#cb7-24" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  </span><span class="sc">$</span>cls<span class="sc">$</span>parent<span class="st">"</span>)</span>
+<span id="cb7-25"><a href="#cb7-25" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Ontology loaded: 226 triples
+
+Ontology classes:
+  GovernmentAgency → ConservationOrganization
+  Threat
+  EconomicBenefit
+  AcademicInstitution → ConservationOrganization
+  Person
+  Observation
+  Reptile → Prey
+  Grassland → Habitat
+  Rainforest → Forest
+  Region → Location
+  Forest → Habitat
+  Location
+  Event
+  Mammal → Animal
+  Jaguar → BigCat
+  IndigenousPerson → Person
+  BigCat → Mammal
+  JaguarPopulation
+  CulturalSignificance
+  Herbivore → Prey
+  LawEnforcement → Person
+  Mesopredator → Prey
+  LegalFramework
+  NGO → ConservationOrganization
+  Prey → Animal
+  Fish → Prey
+  Habitat
+  MountainRange → Location
+  MonitoringTechnique
+  Researcher → Person
+  DietType
+  Tourist → Person
+  HabitatArea → Location
+  ConservationOrganization
+  Conservationist → Person
+  Shrubland → Habitat
+  ConservationEffort
+  Livestock → Prey
+  Animal
+  Wetland → Habitat
+  Rancher → Person
+  WaterBody → Habitat
+  Country → Location
+  State → Location</code></pre>
+</div>
+</div>
+</section>
+<section id="step-3-mapping-tabular-data-to-rdf" class="level2">
+<h2 class="anchored" data-anchor-id="step-3-mapping-tabular-data-to-rdf">Step 3: Mapping Tabular Data to RDF</h2>
+<p>This is the core of structured GraphRAG: deterministically mapping each CSV row to RDF triples following the ontology. Unlike LLM-based extraction, this is <strong>100% precise</strong> — no hallucination, no missed relationships.</p>
+<div id="10" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>ont <span class="op">=</span> <span class="fu">Namespace</span>(<span class="st">"http://example.org/ontology#"</span>)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>res <span class="op">=</span> <span class="fu">Namespace</span>(<span class="st">"http://example.org/resource#"</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">to_iri</span>(name<span class="op">::</span><span class="dt">AbstractString</span>)</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">replace</span>(<span class="fu">strip</span>(name), <span class="st">r"</span><span class="ch">[^</span><span class="st">a-zA-Z0-9</span><span class="ch">]</span><span class="sc">+</span><span class="st">"</span> <span class="op">=&gt;</span> <span class="st">""</span>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Map each record to RDF triples</span></span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> record <span class="kw">in</span> records</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a>    id <span class="op">=</span> record[<span class="st">"jaguar_id"</span>]</span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>    jaguar <span class="op">=</span> <span class="fu">res</span>(id)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-13"><a href="#cb9-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Core type and identity</span></span>
+<span id="cb9-14"><a href="#cb9-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, RDF.<span class="kw">type</span>, <span class="fu">ont</span>(<span class="st">"Jaguar"</span>)))</span>
+<span id="cb9-15"><a href="#cb9-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">URIRef</span>(<span class="st">"http://www.w3.org/2000/01/rdf-schema#label"</span>),</span>
+<span id="cb9-16"><a href="#cb9-16" aria-hidden="true" tabindex="-1"></a>                    <span class="fu">Literal</span>(record[<span class="st">"name"</span>])))</span>
+<span id="cb9-17"><a href="#cb9-17" aria-hidden="true" tabindex="-1"></a>    <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"scientificName"</span>), <span class="fu">Literal</span>(<span class="st">"Panthera onca"</span>)))</span>
+<span id="cb9-18"><a href="#cb9-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-19"><a href="#cb9-19" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Gender</span></span>
+<span id="cb9-20"><a href="#cb9-20" aria-hidden="true" tabindex="-1"></a>    gender <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"gender"</span>, <span class="st">""</span>)</span>
+<span id="cb9-21"><a href="#cb9-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(gender)</span>
+<span id="cb9-22"><a href="#cb9-22" aria-hidden="true" tabindex="-1"></a>        <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"hasGender"</span>), <span class="fu">Literal</span>(gender)))</span>
+<span id="cb9-23"><a href="#cb9-23" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-24"><a href="#cb9-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-25"><a href="#cb9-25" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Locations (multi-valued, semicolon-separated)</span></span>
+<span id="cb9-26"><a href="#cb9-26" aria-hidden="true" tabindex="-1"></a>    location <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"location"</span>, <span class="st">""</span>)</span>
+<span id="cb9-27"><a href="#cb9-27" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(location)</span>
+<span id="cb9-28"><a href="#cb9-28" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> loc <span class="kw">in</span> <span class="fu">split</span>(location, <span class="st">";"</span>)</span>
+<span id="cb9-29"><a href="#cb9-29" aria-hidden="true" tabindex="-1"></a>            loc <span class="op">=</span> <span class="fu">strip</span>(loc)</span>
+<span id="cb9-30"><a href="#cb9-30" aria-hidden="true" tabindex="-1"></a>            loc_iri <span class="op">=</span> <span class="fu">res</span>(<span class="fu">to_iri</span>(loc))</span>
+<span id="cb9-31"><a href="#cb9-31" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"occursIn"</span>), loc_iri))</span>
+<span id="cb9-32"><a href="#cb9-32" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(loc_iri, RDF.<span class="kw">type</span>, <span class="fu">ont</span>(<span class="st">"Location"</span>)))</span>
+<span id="cb9-33"><a href="#cb9-33" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(loc_iri, <span class="fu">URIRef</span>(<span class="st">"http://www.w3.org/2000/01/rdf-schema#label"</span>),</span>
+<span id="cb9-34"><a href="#cb9-34" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">Literal</span>(loc)))</span>
+<span id="cb9-35"><a href="#cb9-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb9-36"><a href="#cb9-36" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-37"><a href="#cb9-37" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-38"><a href="#cb9-38" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Monitoring organizations (multi-valued)</span></span>
+<span id="cb9-39"><a href="#cb9-39" aria-hidden="true" tabindex="-1"></a>    monitoring_org <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"monitoring_org"</span>, <span class="st">""</span>)</span>
+<span id="cb9-40"><a href="#cb9-40" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(monitoring_org)</span>
+<span id="cb9-41"><a href="#cb9-41" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> org <span class="kw">in</span> <span class="fu">split</span>(monitoring_org, <span class="st">";"</span>)</span>
+<span id="cb9-42"><a href="#cb9-42" aria-hidden="true" tabindex="-1"></a>            org <span class="op">=</span> <span class="fu">strip</span>(org)</span>
+<span id="cb9-43"><a href="#cb9-43" aria-hidden="true" tabindex="-1"></a>            org_iri <span class="op">=</span> <span class="fu">res</span>(<span class="fu">to_iri</span>(org))</span>
+<span id="cb9-44"><a href="#cb9-44" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"monitoredByOrg"</span>), org_iri))</span>
+<span id="cb9-45"><a href="#cb9-45" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(org_iri, RDF.<span class="kw">type</span>, <span class="fu">ont</span>(<span class="st">"ConservationOrganization"</span>)))</span>
+<span id="cb9-46"><a href="#cb9-46" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(org_iri, <span class="fu">URIRef</span>(<span class="st">"http://www.w3.org/2000/01/rdf-schema#label"</span>),</span>
+<span id="cb9-47"><a href="#cb9-47" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">Literal</span>(org)))</span>
+<span id="cb9-48"><a href="#cb9-48" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb9-49"><a href="#cb9-49" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-50"><a href="#cb9-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-51"><a href="#cb9-51" aria-hidden="true" tabindex="-1"></a>    <span class="co"># First sighted date</span></span>
+<span id="cb9-52"><a href="#cb9-52" aria-hidden="true" tabindex="-1"></a>    first_sighted <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"first_sighted"</span>, <span class="st">""</span>)</span>
+<span id="cb9-53"><a href="#cb9-53" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(first_sighted)</span>
+<span id="cb9-54"><a href="#cb9-54" aria-hidden="true" tabindex="-1"></a>        <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"hasMonitoringStartDate"</span>),</span>
+<span id="cb9-55"><a href="#cb9-55" aria-hidden="true" tabindex="-1"></a>                        <span class="fu">Literal</span>(first_sighted)))</span>
+<span id="cb9-56"><a href="#cb9-56" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-57"><a href="#cb9-57" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-58"><a href="#cb9-58" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Killed status</span></span>
+<span id="cb9-59"><a href="#cb9-59" aria-hidden="true" tabindex="-1"></a>    is_killed <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"is_killed"</span>, <span class="st">""</span>)</span>
+<span id="cb9-60"><a href="#cb9-60" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(is_killed)</span>
+<span id="cb9-61"><a href="#cb9-61" aria-hidden="true" tabindex="-1"></a>        <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"wasKilled"</span>),</span>
+<span id="cb9-62"><a href="#cb9-62" aria-hidden="true" tabindex="-1"></a>                        <span class="fu">Literal</span>(<span class="fu">lowercase</span>(is_killed) <span class="op">==</span> <span class="st">"true"</span> ? <span class="st">"true"</span> <span class="op">:</span> <span class="st">"false"</span>)))</span>
+<span id="cb9-63"><a href="#cb9-63" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-64"><a href="#cb9-64" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-65"><a href="#cb9-65" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Cause of death</span></span>
+<span id="cb9-66"><a href="#cb9-66" aria-hidden="true" tabindex="-1"></a>    cause_of_death <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"cause_of_death"</span>, <span class="st">""</span>)</span>
+<span id="cb9-67"><a href="#cb9-67" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(cause_of_death)</span>
+<span id="cb9-68"><a href="#cb9-68" aria-hidden="true" tabindex="-1"></a>        <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"causeOfDeath"</span>), <span class="fu">Literal</span>(cause_of_death)))</span>
+<span id="cb9-69"><a href="#cb9-69" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-70"><a href="#cb9-70" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-71"><a href="#cb9-71" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Identification mark</span></span>
+<span id="cb9-72"><a href="#cb9-72" aria-hidden="true" tabindex="-1"></a>    identification_mark <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"identification_mark"</span>, <span class="st">""</span>)</span>
+<span id="cb9-73"><a href="#cb9-73" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(identification_mark)</span>
+<span id="cb9-74"><a href="#cb9-74" aria-hidden="true" tabindex="-1"></a>        <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"hasIdentificationMark"</span>),</span>
+<span id="cb9-75"><a href="#cb9-75" aria-hidden="true" tabindex="-1"></a>                        <span class="fu">Literal</span>(identification_mark)))</span>
+<span id="cb9-76"><a href="#cb9-76" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-77"><a href="#cb9-77" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-78"><a href="#cb9-78" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Threats (multi-valued)</span></span>
+<span id="cb9-79"><a href="#cb9-79" aria-hidden="true" tabindex="-1"></a>    threats <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"threats"</span>, <span class="st">""</span>)</span>
+<span id="cb9-80"><a href="#cb9-80" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(threats)</span>
+<span id="cb9-81"><a href="#cb9-81" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> threat <span class="kw">in</span> <span class="fu">split</span>(threats, <span class="st">";"</span>)</span>
+<span id="cb9-82"><a href="#cb9-82" aria-hidden="true" tabindex="-1"></a>            threat <span class="op">=</span> <span class="fu">strip</span>(threat)</span>
+<span id="cb9-83"><a href="#cb9-83" aria-hidden="true" tabindex="-1"></a>            threat_iri <span class="op">=</span> <span class="fu">res</span>(<span class="fu">to_iri</span>(threat))</span>
+<span id="cb9-84"><a href="#cb9-84" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"facesThreat"</span>), threat_iri))</span>
+<span id="cb9-85"><a href="#cb9-85" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(threat_iri, RDF.<span class="kw">type</span>, <span class="fu">ont</span>(<span class="st">"Threat"</span>)))</span>
+<span id="cb9-86"><a href="#cb9-86" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(threat_iri, <span class="fu">URIRef</span>(<span class="st">"http://www.w3.org/2000/01/rdf-schema#label"</span>),</span>
+<span id="cb9-87"><a href="#cb9-87" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">Literal</span>(threat)))</span>
+<span id="cb9-88"><a href="#cb9-88" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb9-89"><a href="#cb9-89" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-90"><a href="#cb9-90" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-91"><a href="#cb9-91" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Monitoring techniques (multi-valued)</span></span>
+<span id="cb9-92"><a href="#cb9-92" aria-hidden="true" tabindex="-1"></a>    monitoring_technique <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"monitoring_technique"</span>, <span class="st">""</span>)</span>
+<span id="cb9-93"><a href="#cb9-93" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(monitoring_technique)</span>
+<span id="cb9-94"><a href="#cb9-94" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> tech <span class="kw">in</span> <span class="fu">split</span>(monitoring_technique, <span class="st">";"</span>)</span>
+<span id="cb9-95"><a href="#cb9-95" aria-hidden="true" tabindex="-1"></a>            tech <span class="op">=</span> <span class="fu">strip</span>(tech)</span>
+<span id="cb9-96"><a href="#cb9-96" aria-hidden="true" tabindex="-1"></a>            tech_iri <span class="op">=</span> <span class="fu">res</span>(<span class="fu">to_iri</span>(tech))</span>
+<span id="cb9-97"><a href="#cb9-97" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">ont</span>(<span class="st">"monitoredByTechnique"</span>), tech_iri))</span>
+<span id="cb9-98"><a href="#cb9-98" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(tech_iri, RDF.<span class="kw">type</span>, <span class="fu">ont</span>(<span class="st">"MonitoringTechnique"</span>)))</span>
+<span id="cb9-99"><a href="#cb9-99" aria-hidden="true" tabindex="-1"></a>            <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(tech_iri, <span class="fu">URIRef</span>(<span class="st">"http://www.w3.org/2000/01/rdf-schema#label"</span>),</span>
+<span id="cb9-100"><a href="#cb9-100" aria-hidden="true" tabindex="-1"></a>                            <span class="fu">Literal</span>(tech)))</span>
+<span id="cb9-101"><a href="#cb9-101" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb9-102"><a href="#cb9-102" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-103"><a href="#cb9-103" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-104"><a href="#cb9-104" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Status notes</span></span>
+<span id="cb9-105"><a href="#cb9-105" aria-hidden="true" tabindex="-1"></a>    status_notes <span class="op">=</span> <span class="fu">get</span>(record, <span class="st">"status_notes"</span>, <span class="st">""</span>)</span>
+<span id="cb9-106"><a href="#cb9-106" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(status_notes)</span>
+<span id="cb9-107"><a href="#cb9-107" aria-hidden="true" tabindex="-1"></a>        <span class="fu">add!</span>(kg, <span class="fu">Triple</span>(jaguar, <span class="fu">URIRef</span>(<span class="st">"http://www.w3.org/2000/01/rdf-schema#comment"</span>),</span>
+<span id="cb9-108"><a href="#cb9-108" aria-hidden="true" tabindex="-1"></a>                        <span class="fu">Literal</span>(status_notes)))</span>
+<span id="cb9-109"><a href="#cb9-109" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb9-110"><a href="#cb9-110" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb9-111"><a href="#cb9-111" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-112"><a href="#cb9-112" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Knowledge graph after mapping: </span><span class="sc">$</span>(<span class="fu">length</span>(kg))<span class="st"> triples"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Knowledge graph after mapping: 374 triples</code></pre>
+</div>
+</div>
+<p>Let’s inspect the graph:</p>
+<div id="12" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">serialize</span>(kg, <span class="fu">TurtleFormat</span>()))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>@prefix : &lt;http://example.org/resource#&gt; .
+@prefix ont: &lt;http://example.org/ontology#&gt; .
+@prefix owl: &lt;http://www.w3.org/2002/07/owl#&gt; .
+@prefix rdf: &lt;http://www.w3.org/1999/02/22-rdf-syntax-ns#&gt; .
+@prefix rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt; .
+@prefix skos: &lt;http://www.w3.org/2004/02/skos/core#&gt; .
+@prefix xsd: &lt;http://www.w3.org/2001/XMLSchema#&gt; .
+
+ont:AcademicInstitution a owl:Class ;
+    rdfs:subClassOf ont:ConservationOrganization .
+
+ont:Animal a owl:Class .
+
+ont:BigCat a owl:Class ;
+    rdfs:subClassOf ont:Mammal .
+
+ont:CarnivoreDiet a ont:DietType .
+
+ont:ConservationEffort a owl:Class .
+
+ont:ConservationOrganization a owl:Class ;
+    rdfs:comment "An organization involved in monitoring and protecting wildlife." ;
+    rdfs:label "Conservation Organization" .
+
+ont:Conservationist a owl:Class ;
+    rdfs:subClassOf ont:Person .
+
+ont:Country a owl:Class ;
+    rdfs:subClassOf ont:Location .
+
+ont:CulturalSignificance a owl:Class .
+
+ont:DietType a owl:Class .
+
+ont:EconomicBenefit a owl:Class .
+
+ont:Event a owl:Class .
+
+ont:Fish a owl:Class ;
+    rdfs:subClassOf ont:Prey .
+
+ont:Forest a owl:Class ;
+    rdfs:subClassOf ont:Habitat .
+
+ont:GovernmentAgency a owl:Class ;
+    rdfs:subClassOf ont:ConservationOrganization .
+
+ont:Grassland a owl:Class ;
+    rdfs:subClassOf ont:Habitat .
+
+ont:Habitat a owl:Class .
+
+ont:HabitatArea a owl:Class ;
+    rdfs:subClassOf ont:Location .
+
+ont:Herbivore a owl:Class ;
+    rdfs:subClassOf ont:Prey .
+
+ont:IndigenousPerson a owl:Class ;
+    rdfs:subClassOf ont:Person .
+
+ont:Jaguar a owl:Class ;
+    rdfs:comment "The Panthera onca species." ;
+    rdfs:subClassOf ont:BigCat .
+
+ont:JaguarPopulation a owl:Class ;
+    rdfs:comment "A group or population of jaguars." .
+
+ont:LawEnforcement a owl:Class ;
+    rdfs:subClassOf ont:Person .
+
+ont:LegalFramework a owl:Class .
+
+ont:Livestock a owl:Class ;
+    rdfs:subClassOf ont:Prey .
+
+ont:Location a owl:Class .
+
+ont:Mammal a owl:Class ;
+    rdfs:subClassOf ont:Animal .
+
+ont:Mesopredator a owl:Class ;
+    rdfs:subClassOf ont:Prey .
+
+ont:MonitoringTechnique a owl:Class .
+
+ont:MountainRange a owl:Class ;
+    rdfs:subClassOf ont:Location .
+
+ont:NGO a owl:Class ;
+    rdfs:subClassOf ont:ConservationOrganization .
+
+ont:Observation a owl:Class ;
+    rdfs:comment "An event recording the sighting of an animal." ;
+    rdfs:label "Observation" .
+
+ont:Person a owl:Class ;
+    rdfs:comment "A human observer or researcher involved in recording animal sightings." ;
+    rdfs:label "Person" .
+
+ont:Prey a owl:Class ;
+    rdfs:subClassOf ont:Animal .
+
+ont:Rainforest a owl:Class ;
+    rdfs:subClassOf ont:Forest .
+
+ont:Rancher a owl:Class ;
+    rdfs:subClassOf ont:Person .
+
+ont:Region a owl:Class ;
+    rdfs:subClassOf ont:Location .
+
+ont:Reptile a owl:Class ;
+    rdfs:subClassOf ont:Prey .
+
+ont:Researcher a owl:Class ;
+    rdfs:subClassOf ont:Person .
+
+ont:Shrubland a owl:Class ;
+    rdfs:subClassOf ont:Habitat .
+
+ont:State a owl:Class ;
+    rdfs:subClassOf ont:Location .
+
+ont:Threat a owl:Class .
+
+ont:Tourist a owl:Class ;
+    rdfs:subClassOf ont:Person .
+
+ont:WaterBody a owl:Class ;
+    rdfs:subClassOf ont:Habitat .
+
+ont:Wetland a owl:Class ;
+    rdfs:subClassOf ont:Habitat .
+
+ont:causeOfDeath a owl:DatatypeProperty ;
+    rdfs:comment "The cause of death for the jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:string .
+
+ont:connectsHabitat a owl:ObjectProperty ;
+    rdfs:comment "Indicates which habitat areas a wildlife corridor connects." ;
+    rdfs:domain ont:WildlifeCorridor ;
+    rdfs:range ont:HabitatArea .
+
+ont:facesThreat a owl:ObjectProperty ;
+    rdfs:comment "Indicates a threat faced by the jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:Threat .
+
+ont:habitat a owl:ObjectProperty ;
+    rdfs:domain ont:Animal ;
+    rdfs:range ont:Habitat .
+
+ont:hasAcreage a owl:DatatypeProperty ;
+    rdfs:comment "The size of the habitat area in acres." ;
+    rdfs:domain ont:HabitatArea ;
+    rdfs:range xsd:integer .
+
+ont:hasDietType a owl:ObjectProperty ;
+    rdfs:domain ont:Animal ;
+    rdfs:range ont:DietType .
+
+ont:hasGender a owl:DatatypeProperty ;
+    rdfs:comment "Gender of the jaguar (e.g., Male, Female)." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:string .
+
+ont:hasIdentificationMark a owl:DatatypeProperty ;
+    rdfs:comment "Unique spot pattern or other distinguishing mark." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:string .
+
+ont:hasLastSightingDate a owl:DatatypeProperty ;
+    rdfs:comment "Date of the last confirmed sighting of the individual jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:date .
+
+ont:hasLifespan a owl:DatatypeProperty ;
+    rdfs:comment "Lifespan in years." ;
+    rdfs:domain ont:Animal ;
+    rdfs:range xsd:integer .
+
+ont:hasMonitoringStartDate a owl:DatatypeProperty ;
+    rdfs:comment "Date when monitoring of the individual jaguar began." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:date .
+
+ont:hasObservation a owl:ObjectProperty ;
+    rdfs:comment "Links an animal to one of its observation events." ;
+    rdfs:domain ont:Animal ;
+    rdfs:range ont:Observation .
+
+ont:hasOffspring a owl:ObjectProperty ;
+    rdfs:comment "Links a jaguar to its offspring." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:Jaguar .
+
+ont:hasPopulationEstimate a owl:DatatypeProperty ;
+    rdfs:comment "Estimated number of jaguars in a population." ;
+    rdfs:domain ont:JaguarPopulation ;
+    rdfs:range xsd:integer .
+
+ont:hasReleaseDate a owl:DatatypeProperty ;
+    rdfs:comment "Date of the jaguar's release." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:date .
+
+ont:hasRescueDate a owl:DatatypeProperty ;
+    rdfs:comment "Date of the jaguar's rescue." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:date .
+
+ont:implementsEffort a owl:ObjectProperty ;
+    rdfs:comment "Indicates a conservation effort implemented by an organization." ;
+    rdfs:domain ont:ConservationOrganization ;
+    rdfs:range ont:ConservationEffort .
+
+ont:isDependentOn a owl:ObjectProperty ;
+    rdfs:comment "Indicates if one jaguar population is dependent on another (e.g., for dispersal)." ;
+    rdfs:domain ont:JaguarPopulation ;
+    rdfs:range ont:JaguarPopulation .
+
+ont:isOrphaned a owl:DatatypeProperty ;
+    rdfs:comment "Indicates if the jaguar was orphaned." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:boolean .
+
+ont:isRehabilitated a owl:DatatypeProperty ;
+    rdfs:comment "Indicates if the jaguar underwent rehabilitation." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:boolean .
+
+ont:isReleased a owl:DatatypeProperty ;
+    rdfs:comment "Indicates if the jaguar was released into the wild." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:boolean .
+
+ont:locatedIn a owl:ObjectProperty ;
+    rdfs:comment "Specifies the state or administrative region in which a habitat is located." ;
+    rdfs:domain ont:Habitat ;
+    rdfs:range ont:Location .
+
+ont:locatedInCountry a owl:ObjectProperty ;
+    rdfs:comment "Specifies the country in which a state is located." ;
+    rdfs:domain ont:State ;
+    rdfs:range ont:Country .
+
+ont:monitoredByOrg a owl:ObjectProperty ;
+    rdfs:comment "Links an animal to the conservation organization that monitors it." ;
+    rdfs:domain ont:Animal ;
+    rdfs:range ont:ConservationOrganization .
+
+ont:monitoredByTechnique a owl:ObjectProperty ;
+    rdfs:comment "Indicates the technique used to monitor the jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:MonitoringTechnique .
+
+ont:name a owl:DatatypeProperty ;
+    rdfs:domain ont:Animal ;
+    rdfs:range xsd:string .
+
+ont:namedBy a owl:ObjectProperty ;
+    rdfs:comment "The person or group who named the jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:Person .
+
+ont:observedBy a owl:ObjectProperty ;
+    rdfs:comment "The person who recorded the observation." ;
+    rdfs:domain ont:Observation ;
+    rdfs:range ont:Person .
+
+ont:observedDate a owl:DatatypeProperty ;
+    rdfs:comment "The date on which the observation took place." ;
+    rdfs:domain ont:Observation ;
+    rdfs:range xsd:date .
+
+ont:occursIn a owl:ObjectProperty ;
+    rdfs:comment "Indicates a state where an animal has been observed or is known to occur." ;
+    rdfs:domain ont:Animal ;
+    rdfs:range ont:Location .
+
+ont:originatesFrom a owl:ObjectProperty ;
+    rdfs:comment "Indicates the origin location of a dispersing jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:Location .
+
+ont:reintroducedBy a owl:ObjectProperty ;
+    rdfs:comment "The organization that reintroduced the jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:ConservationOrganization .
+
+ont:rescuedBy a owl:ObjectProperty ;
+    rdfs:comment "The organization that rescued the jaguar." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range ont:ConservationOrganization .
+
+ont:scientificName a owl:DatatypeProperty ;
+    rdfs:domain ont:Animal ;
+    rdfs:range xsd:string .
+
+ont:wasKilled a owl:DatatypeProperty ;
+    rdfs:comment "Indicates if the jaguar was killed." ;
+    rdfs:domain ont:Jaguar ;
+    rdfs:range xsd:boolean .
+
+:AmazonRainforest a ont:Location ;
+    rdfs:label "AmazonRainforest" .
+
+:Arizona a ont:Location ;
+    rdfs:label "Arizona" .
+
+:Asa a ont:Jaguar ;
+    ont:hasGender "Female" ;
+    ont:hasIdentificationMark "Light colored coat with widely spaced rosettes" ;
+    ont:hasMonitoringStartDate "2008-03-15" ;
+    ont:monitoredByOrg :PantanalJaguarProject ;
+    ont:occursIn :Pantanal ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Asa" .
+
+:BaboquivariMountains a ont:Location ;
+    rdfs:label "BaboquivariMountains" .
+
+:CameraTrap a ont:MonitoringTechnique ;
+    rdfs:label "CameraTrap" .
+
+:Cayenita a ont:Jaguar ;
+    ont:hasGender "Female" ;
+    ont:occursIn :HatoLaAurora ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Cayenita" .
+
+:ChiricahuaMountains a ont:Location ;
+    rdfs:label "ChiricahuaMountains" .
+
+:Cochise a ont:Jaguar ;
+    ont:hasGender "Male" ;
+    ont:hasMonitoringStartDate "2023-12-20" ;
+    ont:monitoredByTechnique :CameraTrap ;
+    ont:occursIn :HuachucaMountains ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Cochise" .
+
+:ConservationCATalyst a ont:ConservationOrganization ;
+    rdfs:label "ConservationCATalyst" .
+
+:DosCabezasMountains a ont:Location ;
+    rdfs:label "DosCabezasMountains" .
+
+:ElJefe a ont:Jaguar ;
+    ont:hasDietType :CarnivoreDiet ;
+    ont:hasGender "Male" ;
+    ont:hasIdentificationMark "Unique spot patterns" ;
+    ont:hasMonitoringStartDate "2011-11-19" ;
+    ont:monitoredByOrg :UnivOfArizona,
+        :ConservationCATalyst,
+        :NorthernJaguarProject ;
+    ont:monitoredByTechnique :CameraTrap,
+        :ScatDetection ;
+    ont:occursIn :WhetstoneMountains,
+        :SantaRitaMountains,
+        :Sonora ;
+    ont:originatesFrom :Sonora ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "El Jefe" .
+
+:Ferinha a ont:Jaguar ;
+    ont:hasGender "Female" ;
+    ont:hasIdentificationMark "Small female with dense rosette pattern" ;
+    ont:hasMonitoringStartDate "2012-09-10" ;
+    ont:monitoredByOrg :PantanalJaguarProject ;
+    ont:occursIn :Pantanal ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Ferinha" .
+
+:GPSTracking a ont:MonitoringTechnique ;
+    rdfs:label "GPSTracking" .
+
+:HatoLaAurora a ont:Location ;
+    rdfs:label "HatoLaAurora" .
+
+:HuachucaMountains a ont:Location ;
+    rdfs:label "HuachucaMountains" .
+
+:MachoB a ont:Jaguar ;
+    ont:causeOfDeath "Euthanasia following kidney failure caused by capture" ;
+    ont:facesThreat :SnareTrap ;
+    ont:hasGender "Male" ;
+    ont:hasIdentificationMark "Mark resembling Betty Boop" ;
+    ont:hasMonitoringStartDate "1996-01-01" ;
+    ont:monitoredByTechnique :GPSTracking ;
+    ont:occursIn :BaboquivariMountains ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "true" ;
+    rdfs:label "Macho B" .
+
+:Mariposa a ont:Jaguar ;
+    ont:hasGender "Female" ;
+    ont:hasMonitoringStartDate "2009-01-01" ;
+    ont:monitoredByOrg :PantheraColombia ;
+    ont:occursIn :HatoLaAurora ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Mariposa" .
+
+:Mexico a ont:Country ;
+    rdfs:label "Mexico" .
+
+:Mick a ont:Jaguar ;
+    ont:hasGender "Male" ;
+    ont:hasIdentificationMark "Large male with prominent rosettes" ;
+    ont:hasMonitoringStartDate "2015-06-22" ;
+    ont:monitoredByOrg :PantanalJaguarProject ;
+    ont:occursIn :Pantanal ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Mick" .
+
+:NorthernJaguarProject a ont:ConservationOrganization ;
+    rdfs:label "NorthernJaguarProject" .
+
+:OshadNukudam a ont:Jaguar ;
+    ont:occursIn :Arizona ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "O:ṣhad Ñu:kudam" .
+
+:Pantanal a ont:Location ;
+    rdfs:label "Pantanal" .
+
+:PantanalJaguarProject a ont:ConservationOrganization ;
+    rdfs:label "PantanalJaguarProject" .
+
+:PantheraColombia a ont:ConservationOrganization ;
+    rdfs:label "PantheraColombia" .
+
+:Poaching a ont:Threat ;
+    rdfs:label "Poaching" .
+
+:SantaRitaMountains a ont:Location ;
+    rdfs:label "SantaRitaMountains" .
+
+:ScatDetection a ont:MonitoringTechnique ;
+    rdfs:label "ScatDetection" .
+
+:SnareTrap a ont:Threat ;
+    rdfs:label "SnareTrap" .
+
+:Sombra a ont:Jaguar ;
+    ont:hasGender "Male" ;
+    ont:hasMonitoringStartDate "2016-11-01" ;
+    ont:monitoredByTechnique :CameraTrap,
+        :GPSTracking ;
+    ont:occursIn :DosCabezasMountains,
+        :ChiricahuaMountains ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:label "Sombra" .
+
+:Sonora a ont:Location ;
+    rdfs:label "Sonora" .
+
+:UnivOfArizona a ont:ConservationOrganization ;
+    rdfs:label "UnivOfArizona" .
+
+:WhetstoneMountains a ont:Location ;
+    rdfs:label "WhetstoneMountains" .
+
+:WildfireThreat a ont:Threat ;
+    rdfs:label "WildfireThreat" .
+
+:Xama a ont:Jaguar ;
+    ont:facesThreat :WildfireThreat ;
+    ont:hasGender "Male" ;
+    ont:monitoredByTechnique :GPSTracking ;
+    ont:occursIn :AmazonRainforest ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "false" ;
+    rdfs:comment "Orphaned;Rehabilitated;Released" ;
+    rdfs:label "Xamã" .
+
+:Yooko a ont:Jaguar ;
+    ont:causeOfDeath "Killed by mountain lion hunter" ;
+    ont:facesThreat :Poaching ;
+    ont:hasGender "Male" ;
+    ont:occursIn :HuachucaMountains,
+        :Sonora ;
+    ont:scientificName "Panthera onca" ;
+    ont:wasKilled "true" ;
+    rdfs:label "Yo'oko" .
+</code></pre>
+</div>
+</div>
+</section>
+<section id="step-4-querying-the-knowledge-graph" class="level2">
+<h2 class="anchored" data-anchor-id="step-4-querying-the-knowledge-graph">Step 4: Querying the Knowledge Graph</h2>
+<p>With the data mapped to RDF, we can now run precise SPARQL queries. Unlike vector similarity search, these return <strong>exact</strong> results.</p>
+<div id="14" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Query 1: All jaguars and their locations</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> <span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a><span class="st">SELECT ?name ?location WHERE {</span></span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="st">    ?j a ont:Jaguar ;</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="st">       rdfs:label ?name ;</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a><span class="st">       ont:occursIn ?loc .</span></span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="st">    ?loc rdfs:label ?location .</span></span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a><span class="st">ORDER BY ?name</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>)</span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Jaguars and their locations:"</span>)</span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> results</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  </span><span class="sc">$</span>(<span class="fu">string</span>(r[<span class="st">"name"</span>]))<span class="st"> → </span><span class="sc">$</span>(<span class="fu">string</span>(r[<span class="st">"location"</span>]))<span class="st">"</span>)</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Jaguars and their locations:
+  Asa → Pantanal
+  Cayenita → HatoLaAurora
+  Cochise → HuachucaMountains
+  El Jefe → Sonora
+  El Jefe → WhetstoneMountains
+  El Jefe → SantaRitaMountains
+  Ferinha → Pantanal
+  Macho B → BaboquivariMountains
+  Mariposa → HatoLaAurora
+  Mick → Pantanal
+  O:ṣhad Ñu:kudam → Arizona
+  Sombra → ChiricahuaMountains
+  Sombra → DosCabezasMountains
+  Xamã → AmazonRainforest
+  Yo'oko → Sonora
+  Yo'oko → HuachucaMountains</code></pre>
+</div>
+</div>
+<div id="16" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Query 2: Which jaguars were killed?</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> <span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a><span class="st">SELECT ?name ?cause WHERE {</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a><span class="st">    ?j a ont:Jaguar ;</span></span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a><span class="st">       rdfs:label ?name ;</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a><span class="st">       ont:wasKilled "true" .</span></span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="st">    OPTIONAL { ?j ont:causeOfDeath ?cause }</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>)</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Jaguars that were killed:"</span>)</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> results</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    cause <span class="op">=</span> <span class="fu">haskey</span>(r, <span class="st">"cause"</span>) ? <span class="st">" — </span><span class="sc">$</span>(<span class="fu">string</span>(r[<span class="st">"cause"</span>]))<span class="st">"</span> <span class="op">:</span> <span class="st">""</span></span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  </span><span class="sc">$</span>(<span class="fu">string</span>(r[<span class="st">"name"</span>]))<span class="sc">$</span>cause<span class="st">"</span>)</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Jaguars that were killed:
+  Yo'oko — Killed by mountain lion hunter
+  Macho B — Euthanasia following kidney failure caused by capture</code></pre>
+</div>
+</div>
+<div id="18" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Query 3: Which organizations monitor which jaguars?</span></span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>results <span class="op">=</span> <span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a><span class="st">PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a><span class="st">SELECT ?org ?name WHERE {</span></span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a><span class="st">    ?j a ont:Jaguar ;</span></span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a><span class="st">       rdfs:label ?name ;</span></span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a><span class="st">       ont:monitoredByOrg ?o .</span></span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a><span class="st">    ?o rdfs:label ?org .</span></span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a><span class="st">}</span></span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a><span class="st">ORDER BY ?org</span></span>
+<span id="cb17-12"><a href="#cb17-12" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>)</span>
+<span id="cb17-13"><a href="#cb17-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb17-14"><a href="#cb17-14" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Monitoring organizations and their jaguars:"</span>)</span>
+<span id="cb17-15"><a href="#cb17-15" aria-hidden="true" tabindex="-1"></a>current_org <span class="op">=</span> <span class="st">""</span></span>
+<span id="cb17-16"><a href="#cb17-16" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> r <span class="kw">in</span> results</span>
+<span id="cb17-17"><a href="#cb17-17" aria-hidden="true" tabindex="-1"></a>    org <span class="op">=</span> <span class="fu">string</span>(r[<span class="st">"org"</span>])</span>
+<span id="cb17-18"><a href="#cb17-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> org <span class="op">!=</span> current_org</span>
+<span id="cb17-19"><a href="#cb17-19" aria-hidden="true" tabindex="-1"></a>        <span class="fu">println</span>(<span class="st">"  </span><span class="sc">$</span>org<span class="st">:"</span>)</span>
+<span id="cb17-20"><a href="#cb17-20" aria-hidden="true" tabindex="-1"></a>        current_org <span class="op">=</span> org</span>
+<span id="cb17-21"><a href="#cb17-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb17-22"><a href="#cb17-22" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"    - </span><span class="sc">$</span>(<span class="fu">string</span>(r[<span class="st">"name"</span>]))<span class="st">"</span>)</span>
+<span id="cb17-23"><a href="#cb17-23" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Monitoring organizations and their jaguars:
+  ConservationCATalyst:
+    - El Jefe
+  NorthernJaguarProject:
+    - El Jefe
+  PantanalJaguarProject:
+    - Asa
+    - Ferinha
+    - Mick
+  PantheraColombia:
+    - Mariposa
+  UnivOfArizona:
+    - El Jefe</code></pre>
+</div>
+</div>
+</section>
+<section id="step-5-retrieval-functions" class="level2">
+<h2 class="anchored" data-anchor-id="step-5-retrieval-functions">Step 5: Retrieval Functions</h2>
+<p>We define retrieval functions that extract structured context from the knowledge graph for the LLM.</p>
+<div id="20" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a><span class="st">"""Query all facts about a specific jaguar by name."""</span></span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">query_jaguar</span>(name<span class="op">::</span><span class="dt">String</span>)</span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> <span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?pred ?obj WHERE {</span></span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a><span class="st">        ?j a ont:Jaguar ;</span></span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a><span class="st">           rdfs:label "</span><span class="sc">$</span>name<span class="st">" ;</span></span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a><span class="st">           ?pred ?obj .</span></span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a><span class="st">    }</span></span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>)</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a>    <span class="fu">isempty</span>(results) <span class="op">&amp;&amp;</span> <span class="cf">return</span> <span class="st">"No jaguar found with name '</span><span class="sc">$</span>name<span class="st">'."</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>    lines <span class="op">=</span> <span class="dt">String</span>[]</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> r <span class="kw">in</span> results</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>        pred <span class="op">=</span> <span class="fu">split</span>(<span class="fu">string</span>(r[<span class="st">"pred"</span>]), <span class="st">r"</span><span class="ch">[</span><span class="st">#/</span><span class="ch">]</span><span class="st">"</span>)[<span class="kw">end</span>]</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>        obj <span class="op">=</span> <span class="fu">string</span>(r[<span class="st">"obj"</span>])</span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Skip the type triple</span></span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>        pred <span class="op">==</span> <span class="st">"type"</span> <span class="op">&amp;&amp;</span> <span class="cf">continue</span></span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>        <span class="fu">push!</span>(lines, <span class="st">"</span><span class="sc">$</span>pred<span class="st">: </span><span class="sc">$</span>obj<span class="st">"</span>)</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">"Facts about </span><span class="sc">$</span>name<span class="st">:</span><span class="sc">\n</span><span class="st">"</span> <span class="op">*</span> <span class="fu">join</span>(lines, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a><span class="st">"""List all jaguars in a given location."""</span></span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">query_location</span>(location<span class="op">::</span><span class="dt">String</span>)</span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>    results <span class="op">=</span> <span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?name WHERE {</span></span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a><span class="st">        ?j a ont:Jaguar ;</span></span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a><span class="st">           rdfs:label ?name ;</span></span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a><span class="st">           ont:occursIn ?loc .</span></span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a><span class="st">        ?loc rdfs:label ?location .</span></span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a><span class="st">        FILTER(CONTAINS(LCASE(STR(?location)), LCASE("</span><span class="sc">$</span>location<span class="st">")))</span></span>
+<span id="cb19-36"><a href="#cb19-36" aria-hidden="true" tabindex="-1"></a><span class="st">    }</span></span>
+<span id="cb19-37"><a href="#cb19-37" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>)</span>
+<span id="cb19-38"><a href="#cb19-38" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-39"><a href="#cb19-39" aria-hidden="true" tabindex="-1"></a>    <span class="fu">isempty</span>(results) <span class="op">&amp;&amp;</span> <span class="cf">return</span> <span class="st">"No jaguars found in '</span><span class="sc">$</span>location<span class="st">'."</span></span>
+<span id="cb19-40"><a href="#cb19-40" aria-hidden="true" tabindex="-1"></a>    names <span class="op">=</span> [<span class="fu">string</span>(r[<span class="st">"name"</span>]) for r <span class="kw">in</span> results]</span>
+<span id="cb19-41"><a href="#cb19-41" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="st">"Jaguars in </span><span class="sc">$</span>location<span class="st">: "</span> <span class="op">*</span> <span class="fu">join</span>(names, <span class="st">", "</span>)</span>
+<span id="cb19-42"><a href="#cb19-42" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb19-43"><a href="#cb19-43" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-44"><a href="#cb19-44" aria-hidden="true" tabindex="-1"></a><span class="st">"""Run a custom SPARQL query."""</span></span>
+<span id="cb19-45"><a href="#cb19-45" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">run_sparql</span>(query<span class="op">::</span><span class="dt">String</span>)</span>
+<span id="cb19-46"><a href="#cb19-46" aria-hidden="true" tabindex="-1"></a>    <span class="cf">try</span></span>
+<span id="cb19-47"><a href="#cb19-47" aria-hidden="true" tabindex="-1"></a>        results <span class="op">=</span> <span class="fu">sparql_query</span>(kg, query)</span>
+<span id="cb19-48"><a href="#cb19-48" aria-hidden="true" tabindex="-1"></a>        <span class="fu">isempty</span>(results) <span class="op">&amp;&amp;</span> <span class="cf">return</span> <span class="st">"Query returned no results."</span></span>
+<span id="cb19-49"><a href="#cb19-49" aria-hidden="true" tabindex="-1"></a>        lines <span class="op">=</span> <span class="dt">String</span>[]</span>
+<span id="cb19-50"><a href="#cb19-50" aria-hidden="true" tabindex="-1"></a>        <span class="cf">for</span> row <span class="kw">in</span> results</span>
+<span id="cb19-51"><a href="#cb19-51" aria-hidden="true" tabindex="-1"></a>            parts <span class="op">=</span> [<span class="st">"</span><span class="sc">$</span>k<span class="st">=</span><span class="sc">$</span>(v isa Literal ? <span class="fu">string</span>(v) <span class="op">:</span> <span class="fu">split</span>(<span class="fu">string</span>(v), <span class="st">r"</span><span class="ch">[</span><span class="st">#/</span><span class="ch">]</span><span class="st">"</span>)[<span class="kw">end</span>])<span class="st">"</span> for (k, v) <span class="kw">in</span> row]</span>
+<span id="cb19-52"><a href="#cb19-52" aria-hidden="true" tabindex="-1"></a>            <span class="fu">push!</span>(lines, <span class="fu">join</span>(parts, <span class="st">", "</span>))</span>
+<span id="cb19-53"><a href="#cb19-53" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb19-54"><a href="#cb19-54" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"Results (</span><span class="sc">$</span>(<span class="fu">length</span>(results))<span class="st"> rows):</span><span class="sc">\n</span><span class="st">"</span> <span class="op">*</span> <span class="fu">join</span>(lines, <span class="st">"</span><span class="sc">\n</span><span class="st">"</span>)</span>
+<span id="cb19-55"><a href="#cb19-55" aria-hidden="true" tabindex="-1"></a>    <span class="cf">catch</span> <span class="cn">e</span></span>
+<span id="cb19-56"><a href="#cb19-56" aria-hidden="true" tabindex="-1"></a>        <span class="cf">return</span> <span class="st">"SPARQL error: </span><span class="sc">$</span>(<span class="fu">sprint</span>(showerror, <span class="cn">e</span>))<span class="st">"</span></span>
+<span id="cb19-57"><a href="#cb19-57" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb19-58"><a href="#cb19-58" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb19-59"><a href="#cb19-59" aria-hidden="true" tabindex="-1"></a><span class="cn">nothing</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Let’s verify the retrieval functions:</p>
+<div id="22" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">query_jaguar</span>(<span class="st">"El Jefe"</span>))</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>()</span>
+<span id="cb20-3"><a href="#cb20-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">query_location</span>(<span class="st">"Pantanal"</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Facts about El Jefe:
+originatesFrom: http://example.org/resource#Sonora
+wasKilled: false
+hasMonitoringStartDate: 2011-11-19
+monitoredByOrg: http://example.org/resource#NorthernJaguarProject
+monitoredByOrg: http://example.org/resource#ConservationCATalyst
+monitoredByOrg: http://example.org/resource#UnivOfArizona
+monitoredByTechnique: http://example.org/resource#ScatDetection
+monitoredByTechnique: http://example.org/resource#CameraTrap
+hasDietType: http://example.org/resource#CarnivoreDiet
+label: El Jefe
+hasIdentificationMark: Unique spot patterns
+scientificName: Panthera onca
+hasGender: Male
+occursIn: http://example.org/resource#Sonora
+occursIn: http://example.org/resource#WhetstoneMountains
+occursIn: http://example.org/resource#SantaRitaMountains
+
+Jaguars in Pantanal: Asa, Ferinha, Mick</code></pre>
+</div>
+</div>
+</section>
+<section id="step-6-structured-graphrag-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="step-6-structured-graphrag-pipeline">Step 6: Structured GraphRAG Pipeline</h2>
+<p>Now we combine graph retrieval with LLM generation. The pipeline:</p>
+<ol type="1">
+<li><strong>Retrieve</strong>: Query the knowledge graph for relevant facts</li>
+<li><strong>Generate</strong>: Pass retrieved facts as context to the LLM</li>
+</ol>
+<div id="24" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model<span class="op">=</span><span class="st">"gemma3:latest"</span>)</span>
+<span id="cb22-2"><a href="#cb22-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-3"><a href="#cb22-3" aria-hidden="true" tabindex="-1"></a><span class="st">"""Ask a question using structured GraphRAG."""</span></span>
+<span id="cb22-4"><a href="#cb22-4" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">ask_structured_rag</span>(question<span class="op">::</span><span class="dt">String</span>; jaguars<span class="op">::</span><span class="dt">Vector{String}</span>=<span class="dt">String</span>[],</span>
+<span id="cb22-5"><a href="#cb22-5" aria-hidden="true" tabindex="-1"></a>                            locations<span class="op">::</span><span class="dt">Vector{String}</span>=<span class="dt">String</span>[],</span>
+<span id="cb22-6"><a href="#cb22-6" aria-hidden="true" tabindex="-1"></a>                            sparql<span class="op">::</span><span class="dt">String</span>=<span class="st">""</span>)</span>
+<span id="cb22-7"><a href="#cb22-7" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Retrieve context from knowledge graph</span></span>
+<span id="cb22-8"><a href="#cb22-8" aria-hidden="true" tabindex="-1"></a>    context_parts <span class="op">=</span> <span class="dt">String</span>[]</span>
+<span id="cb22-9"><a href="#cb22-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> name <span class="kw">in</span> jaguars</span>
+<span id="cb22-10"><a href="#cb22-10" aria-hidden="true" tabindex="-1"></a>        <span class="fu">push!</span>(context_parts, <span class="fu">query_jaguar</span>(name))</span>
+<span id="cb22-11"><a href="#cb22-11" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb22-12"><a href="#cb22-12" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> loc <span class="kw">in</span> locations</span>
+<span id="cb22-13"><a href="#cb22-13" aria-hidden="true" tabindex="-1"></a>        <span class="fu">push!</span>(context_parts, <span class="fu">query_location</span>(loc))</span>
+<span id="cb22-14"><a href="#cb22-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb22-15"><a href="#cb22-15" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> !<span class="fu">isempty</span>(sparql)</span>
+<span id="cb22-16"><a href="#cb22-16" aria-hidden="true" tabindex="-1"></a>        <span class="fu">push!</span>(context_parts, <span class="fu">run_sparql</span>(sparql))</span>
+<span id="cb22-17"><a href="#cb22-17" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb22-18"><a href="#cb22-18" aria-hidden="true" tabindex="-1"></a>    context <span class="op">=</span> <span class="fu">join</span>(context_parts, <span class="st">"</span><span class="sc">\n\n</span><span class="st">"</span>)</span>
+<span id="cb22-19"><a href="#cb22-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-20"><a href="#cb22-20" aria-hidden="true" tabindex="-1"></a>    rag_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb22-21"><a href="#cb22-21" aria-hidden="true" tabindex="-1"></a>        name<span class="op">=</span><span class="st">"JaguarExpert"</span>,</span>
+<span id="cb22-22"><a href="#cb22-22" aria-hidden="true" tabindex="-1"></a>        instructions<span class="op">=</span><span class="st">"""You are a wildlife conservation expert specializing in jaguars.</span></span>
+<span id="cb22-23"><a href="#cb22-23" aria-hidden="true" tabindex="-1"></a><span class="st">Answer the question using ONLY the knowledge graph facts provided below.</span></span>
+<span id="cb22-24"><a href="#cb22-24" aria-hidden="true" tabindex="-1"></a><span class="st">Do not use your own knowledge. If the facts don't contain enough information, say so.</span></span>
+<span id="cb22-25"><a href="#cb22-25" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb22-26"><a href="#cb22-26" aria-hidden="true" tabindex="-1"></a><span class="st">Knowledge Graph Facts:</span></span>
+<span id="cb22-27"><a href="#cb22-27" aria-hidden="true" tabindex="-1"></a><span class="sc">$</span>context<span class="st">"""</span>,</span>
+<span id="cb22-28"><a href="#cb22-28" aria-hidden="true" tabindex="-1"></a>        client<span class="op">=</span>client,</span>
+<span id="cb22-29"><a href="#cb22-29" aria-hidden="true" tabindex="-1"></a>        options<span class="op">=</span><span class="fu">ChatOptions</span>(temperature<span class="op">=</span><span class="fl">0.1</span>),</span>
+<span id="cb22-30"><a href="#cb22-30" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb22-31"><a href="#cb22-31" aria-hidden="true" tabindex="-1"></a>    response <span class="op">=</span> <span class="fu">run_agent</span>(rag_agent, question)</span>
+<span id="cb22-32"><a href="#cb22-32" aria-hidden="true" tabindex="-1"></a>    <span class="cf">return</span> <span class="fu">get_text</span>(response)</span>
+<span id="cb22-33"><a href="#cb22-33" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span>
+<span id="cb22-34"><a href="#cb22-34" aria-hidden="true" tabindex="-1"></a><span class="cn">nothing</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="step-7-asking-questions" class="level2">
+<h2 class="anchored" data-anchor-id="step-7-asking-questions">Step 7: Asking Questions</h2>
+<section id="individual-jaguar-lookup" class="level3">
+<h3 class="anchored" data-anchor-id="individual-jaguar-lookup">Individual jaguar lookup</h3>
+<div id="26" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>answer <span class="op">=</span> <span class="fu">ask_structured_rag</span>(</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Tell me about El Jefe. Where has he been seen and who monitors him?"</span>,</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>    jaguars<span class="op">=</span>[<span class="st">"El Jefe"</span>],</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(answer)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>El Jefe is a male jaguar (*Panthera onca*) with unique spot patterns. He originates from Sonora and has been seen in Sonora, the Whetstone Mountains, and the Santa Rita Mountains. He is monitored by the Northern Jaguar Project, ConservationCATalyst, the University of Arizona, using scat detection and camera trap techniques.</code></pre>
+</div>
+</div>
+</section>
+<section id="location-based-query" class="level3">
+<h3 class="anchored" data-anchor-id="location-based-query">Location-based query</h3>
+<div id="28" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb25"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb25-1"><a href="#cb25-1" aria-hidden="true" tabindex="-1"></a>answer <span class="op">=</span> <span class="fu">ask_structured_rag</span>(</span>
+<span id="cb25-2"><a href="#cb25-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Which jaguars have been documented in the Pantanal region?"</span>,</span>
+<span id="cb25-3"><a href="#cb25-3" aria-hidden="true" tabindex="-1"></a>    locations<span class="op">=</span>[<span class="st">"Pantanal"</span>],</span>
+<span id="cb25-4"><a href="#cb25-4" aria-hidden="true" tabindex="-1"></a>    jaguars<span class="op">=</span>[<span class="st">"Asa"</span>, <span class="st">"Mick"</span>, <span class="st">"Ferinha"</span>],</span>
+<span id="cb25-5"><a href="#cb25-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb25-6"><a href="#cb25-6" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(answer)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Asa, Ferinha, and Mick have been documented in the Pantanal region.</code></pre>
+</div>
+</div>
+</section>
+<section id="conservation-status-query" class="level3">
+<h3 class="anchored" data-anchor-id="conservation-status-query">Conservation status query</h3>
+<div id="30" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb27"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb27-1"><a href="#cb27-1" aria-hidden="true" tabindex="-1"></a>answer <span class="op">=</span> <span class="fu">ask_structured_rag</span>(</span>
+<span id="cb27-2"><a href="#cb27-2" aria-hidden="true" tabindex="-1"></a>    <span class="st">"Which jaguars have been killed and what were the causes?"</span>,</span>
+<span id="cb27-3"><a href="#cb27-3" aria-hidden="true" tabindex="-1"></a>    jaguars<span class="op">=</span>[<span class="st">"Macho B"</span>, <span class="st">"Yo'oko"</span>],</span>
+<span id="cb27-4"><a href="#cb27-4" aria-hidden="true" tabindex="-1"></a>    sparql<span class="op">=</span><span class="st">"""</span></span>
+<span id="cb27-5"><a href="#cb27-5" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb27-6"><a href="#cb27-6" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb27-7"><a href="#cb27-7" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?name ?cause WHERE {</span></span>
+<span id="cb27-8"><a href="#cb27-8" aria-hidden="true" tabindex="-1"></a><span class="st">        ?j a ont:Jaguar ; rdfs:label ?name ; ont:wasKilled "true" .</span></span>
+<span id="cb27-9"><a href="#cb27-9" aria-hidden="true" tabindex="-1"></a><span class="st">        OPTIONAL { ?j ont:causeOfDeath ?cause }</span></span>
+<span id="cb27-10"><a href="#cb27-10" aria-hidden="true" tabindex="-1"></a><span class="st">    }"""</span>,</span>
+<span id="cb27-11"><a href="#cb27-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb27-12"><a href="#cb27-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(answer)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>name=Yo'oko, cause=Killed by mountain lion hunter
+name=Macho B, cause=Euthanasia following kidney failure caused by capture</code></pre>
+</div>
+</div>
+</section>
+</section>
+<section id="step-8-structured-graphrag-vs-plain-llm" class="level2">
+<h2 class="anchored" data-anchor-id="step-8-structured-graphrag-vs-plain-llm">Step 8: Structured GraphRAG vs Plain LLM</h2>
+<p>Let’s compare the structured GraphRAG pipeline against a plain LLM:</p>
+<div id="32" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb29"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb29-1"><a href="#cb29-1" aria-hidden="true" tabindex="-1"></a>plain_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb29-2"><a href="#cb29-2" aria-hidden="true" tabindex="-1"></a>    name<span class="op">=</span><span class="st">"PlainAssistant"</span>,</span>
+<span id="cb29-3"><a href="#cb29-3" aria-hidden="true" tabindex="-1"></a>    instructions<span class="op">=</span><span class="st">"You are a helpful assistant. Answer questions concisely."</span>,</span>
+<span id="cb29-4"><a href="#cb29-4" aria-hidden="true" tabindex="-1"></a>    client<span class="op">=</span>client,</span>
+<span id="cb29-5"><a href="#cb29-5" aria-hidden="true" tabindex="-1"></a>    options<span class="op">=</span><span class="fu">ChatOptions</span>(temperature<span class="op">=</span><span class="fl">0.1</span>),</span>
+<span id="cb29-6"><a href="#cb29-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-7"><a href="#cb29-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-8"><a href="#cb29-8" aria-hidden="true" tabindex="-1"></a>question <span class="op">=</span> <span class="st">"What monitoring techniques are used to track jaguars in the US?"</span></span>
+<span id="cb29-9"><a href="#cb29-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-10"><a href="#cb29-10" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"="</span> <span class="op">^</span> <span class="fl">60</span>)</span>
+<span id="cb29-11"><a href="#cb29-11" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Question: </span><span class="sc">$</span>question<span class="st">"</span>)</span>
+<span id="cb29-12"><a href="#cb29-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"="</span> <span class="op">^</span> <span class="fl">60</span>)</span>
+<span id="cb29-13"><a href="#cb29-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-14"><a href="#cb29-14" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">--- Structured GraphRAG (grounded in knowledge graph) ---"</span>)</span>
+<span id="cb29-15"><a href="#cb29-15" aria-hidden="true" tabindex="-1"></a>answer_rag <span class="op">=</span> <span class="fu">ask_structured_rag</span>(question,</span>
+<span id="cb29-16"><a href="#cb29-16" aria-hidden="true" tabindex="-1"></a>    sparql<span class="op">=</span><span class="st">"""</span></span>
+<span id="cb29-17"><a href="#cb29-17" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb29-18"><a href="#cb29-18" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX rdfs: &lt;http://www.w3.org/2000/01/rdf-schema#&gt;</span></span>
+<span id="cb29-19"><a href="#cb29-19" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?name ?technique WHERE {</span></span>
+<span id="cb29-20"><a href="#cb29-20" aria-hidden="true" tabindex="-1"></a><span class="st">        ?j a ont:Jaguar ; rdfs:label ?name ;</span></span>
+<span id="cb29-21"><a href="#cb29-21" aria-hidden="true" tabindex="-1"></a><span class="st">           ont:monitoredByTechnique ?t .</span></span>
+<span id="cb29-22"><a href="#cb29-22" aria-hidden="true" tabindex="-1"></a><span class="st">        ?t rdfs:label ?technique .</span></span>
+<span id="cb29-23"><a href="#cb29-23" aria-hidden="true" tabindex="-1"></a><span class="st">    }"""</span>,</span>
+<span id="cb29-24"><a href="#cb29-24" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb29-25"><a href="#cb29-25" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(answer_rag)</span>
+<span id="cb29-26"><a href="#cb29-26" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb29-27"><a href="#cb29-27" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"</span><span class="sc">\n</span><span class="st">--- Plain LLM (no knowledge graph) ---"</span>)</span>
+<span id="cb29-28"><a href="#cb29-28" aria-hidden="true" tabindex="-1"></a>response_plain <span class="op">=</span> <span class="fu">run_agent</span>(plain_agent, question)</span>
+<span id="cb29-29"><a href="#cb29-29" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">get_text</span>(response_plain))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>============================================================
+Question: What monitoring techniques are used to track jaguars in the US?
+============================================================
+
+--- Structured GraphRAG (grounded in knowledge graph) ---
+Based on the provided knowledge graph, the following monitoring techniques are used to track jaguars in the US:
+
+*   CameraTrap
+*   GPSTracking
+*   ScatDetection
+
+--- Plain LLM (no knowledge graph) ---
+*   **GPS Collars:** Most common for tracking movements and home ranges.
+*   **Camera Traps:** Used to monitor jaguar presence and behavior.
+*   **Telemetry:** Utilizing satellite tracking for longer-term monitoring.
+*   **Genetic Sampling:** Analyzing DNA to identify individuals and track population genetics.</code></pre>
+</div>
+</div>
+<p>The structured GraphRAG answer is grounded in the exact data from the CSV, while the plain LLM provides generic knowledge that may not match the specific dataset.</p>
+</section>
+<section id="step-9-graph-statistics" class="level2">
+<h2 class="anchored" data-anchor-id="step-9-graph-statistics">Step 9: Graph Statistics</h2>
+<div id="34" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb31"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb31-1"><a href="#cb31-1" aria-hidden="true" tabindex="-1"></a>subjects_set <span class="op">=</span> <span class="fu">Set</span>(<span class="fu">string</span>(t.subject) <span class="cf">for</span> t <span class="kw">in</span> <span class="fu">triples</span>(kg))</span>
+<span id="cb31-2"><a href="#cb31-2" aria-hidden="true" tabindex="-1"></a>predicates_set <span class="op">=</span> <span class="fu">Set</span>(<span class="fu">string</span>(t.predicate) <span class="cf">for</span> t <span class="kw">in</span> <span class="fu">triples</span>(kg))</span>
+<span id="cb31-3"><a href="#cb31-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-4"><a href="#cb31-4" aria-hidden="true" tabindex="-1"></a><span class="co"># Count instances by type</span></span>
+<span id="cb31-5"><a href="#cb31-5" aria-hidden="true" tabindex="-1"></a>jaguar_count <span class="op">=</span> <span class="fu">length</span>(<span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb31-6"><a href="#cb31-6" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb31-7"><a href="#cb31-7" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?j WHERE { ?j a ont:Jaguar }</span></span>
+<span id="cb31-8"><a href="#cb31-8" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>))</span>
+<span id="cb31-9"><a href="#cb31-9" aria-hidden="true" tabindex="-1"></a>location_count <span class="op">=</span> <span class="fu">length</span>(<span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb31-10"><a href="#cb31-10" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb31-11"><a href="#cb31-11" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?l WHERE { ?l a ont:Location }</span></span>
+<span id="cb31-12"><a href="#cb31-12" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>))</span>
+<span id="cb31-13"><a href="#cb31-13" aria-hidden="true" tabindex="-1"></a>org_count <span class="op">=</span> <span class="fu">length</span>(<span class="fu">sparql_query</span>(kg, <span class="st">"""</span></span>
+<span id="cb31-14"><a href="#cb31-14" aria-hidden="true" tabindex="-1"></a><span class="st">    PREFIX ont: &lt;http://example.org/ontology#&gt;</span></span>
+<span id="cb31-15"><a href="#cb31-15" aria-hidden="true" tabindex="-1"></a><span class="st">    SELECT ?o WHERE { ?o a ont:ConservationOrganization }</span></span>
+<span id="cb31-16"><a href="#cb31-16" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span>))</span>
+<span id="cb31-17"><a href="#cb31-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb31-18"><a href="#cb31-18" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Knowledge Graph Statistics:"</span>)</span>
+<span id="cb31-19"><a href="#cb31-19" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"  Total triples: "</span>, <span class="fu">length</span>(kg))</span>
+<span id="cb31-20"><a href="#cb31-20" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"  Unique subjects: "</span>, <span class="fu">length</span>(subjects_set))</span>
+<span id="cb31-21"><a href="#cb31-21" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"  Unique predicates: "</span>, <span class="fu">length</span>(predicates_set))</span>
+<span id="cb31-22"><a href="#cb31-22" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>()</span>
+<span id="cb31-23"><a href="#cb31-23" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Instance counts:"</span>)</span>
+<span id="cb31-24"><a href="#cb31-24" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"  Jaguars: </span><span class="sc">$</span>jaguar_count<span class="st">"</span>)</span>
+<span id="cb31-25"><a href="#cb31-25" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"  Locations: </span><span class="sc">$</span>location_count<span class="st">"</span>)</span>
+<span id="cb31-26"><a href="#cb31-26" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"  Conservation Orgs: </span><span class="sc">$</span>org_count<span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-stdout">
+<pre><code>Knowledge Graph Statistics:
+  Total triples: 374
+  Unique subjects: 115
+  Unique predicates: 18
+
+Instance counts:
+  Jaguars: 12
+  Locations: 11
+  Conservation Orgs: 5</code></pre>
+</div>
+</div>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 12%">
+<col style="width: 31%">
+<col style="width: 56%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Aspect</th>
+<th>Structured GraphRAG</th>
+<th>Text-based GraphRAG (Vignette 13)</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Input</strong></td>
+<td>Tabular CSV data</td>
+<td>Unstructured text passages</td>
+</tr>
+<tr class="even">
+<td><strong>Extraction</strong></td>
+<td>Deterministic column mapping</td>
+<td>LLM-based entity extraction</td>
+</tr>
+<tr class="odd">
+<td><strong>Accuracy</strong></td>
+<td>100% precise</td>
+<td>Probabilistic (can miss/hallucinate)</td>
+</tr>
+<tr class="even">
+<td><strong>Ontology</strong></td>
+<td>OWL schema defines classes &amp; properties</td>
+<td>Implicit from extraction prompt</td>
+</tr>
+<tr class="odd">
+<td><strong>Multi-valued fields</strong></td>
+<td>Split on delimiter, map each</td>
+<td>LLM must recognize lists</td>
+</tr>
+<tr class="even">
+<td><strong>Speed</strong></td>
+<td>Instant (no LLM needed for ingestion)</td>
+<td>Slow (LLM call per passage)</td>
+</tr>
+</tbody>
+</table>
+<section id="key-takeaways" class="level3">
+<h3 class="anchored" data-anchor-id="key-takeaways">Key Takeaways</h3>
+<ol type="1">
+<li><strong>Don’t embed, map</strong>: Structured data should be mapped directly to a knowledge graph, not embedded into vectors.</li>
+<li><strong>Ontology-driven</strong>: An OWL ontology gives semantic meaning to columns and ensures consistent relationships.</li>
+<li><strong>Zero hallucination ingestion</strong>: Unlike LLM-based extraction, tabular mapping is deterministic and complete.</li>
+<li><strong>SPARQL precision</strong>: Exact queries replace fuzzy similarity search.</li>
+<li><strong>RDFLib.jl</strong>: Provides the full RDF stack for loading ontologies, mapping data, and querying with SPARQL.</li>
+</ol>
+</section>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>
