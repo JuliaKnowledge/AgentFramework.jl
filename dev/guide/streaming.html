@@ -1,0 +1,162 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Streaming · AgentFramework.jl</title><meta name="title" content="Streaming · AgentFramework.jl"/><meta property="og:title" content="Streaming · AgentFramework.jl"/><meta property="twitter:title" content="Streaming · AgentFramework.jl"/><meta name="description" content="Documentation for AgentFramework.jl."/><meta property="og:description" content="Documentation for AgentFramework.jl."/><meta property="twitter:description" content="Documentation for AgentFramework.jl."/><meta property="og:url" content="https://sdwfrost.github.io/AgentFramework.jl/guide/streaming.html"/><meta property="twitter:url" content="https://sdwfrost.github.io/AgentFramework.jl/guide/streaming.html"/><link rel="canonical" href="https://sdwfrost.github.io/AgentFramework.jl/guide/streaming.html"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">AgentFramework.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="getting_started.html">Getting Started</a></li><li><a class="tocitem" href="agents.html">Agents</a></li><li><a class="tocitem" href="tools.html">Tools</a></li><li><a class="tocitem" href="middleware.html">Middleware</a></li><li><a class="tocitem" href="sessions.html">Sessions &amp; Memory</a></li><li><a class="tocitem" href="workflows.html">Workflows</a></li><li><a class="tocitem" href="providers.html">Providers</a></li><li class="is-active"><a class="tocitem" href="streaming.html">Streaming</a><ul class="internal"><li><a class="tocitem" href="#Overview"><span>Overview</span></a></li><li><a class="tocitem" href="#Basic-Streaming"><span>Basic Streaming</span></a></li><li><a class="tocitem" href="#AgentResponseUpdate"><span>AgentResponseUpdate</span></a></li><li><a class="tocitem" href="#Streaming-with-Tools"><span>Streaming with Tools</span></a></li><li><a class="tocitem" href="#StreamingToolAccumulator"><span>StreamingToolAccumulator</span></a></li><li><a class="tocitem" href="#Streaming-with-Sessions"><span>Streaming with Sessions</span></a></li><li><a class="tocitem" href="#Chat-Client-Level-Streaming"><span>Chat Client-Level Streaming</span></a></li><li><a class="tocitem" href="#Example:-Streaming-with-Progress-Display"><span>Example: Streaming with Progress Display</span></a></li><li><a class="tocitem" href="#Workflow-Streaming"><span>Workflow Streaming</span></a></li><li><a class="tocitem" href="#Next-Steps"><span>Next Steps</span></a></li></ul></li><li><a class="tocitem" href="advanced.html">Advanced Topics</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/agents.html">Agents</a></li><li><a class="tocitem" href="../api/content.html">Content</a></li><li><a class="tocitem" href="../api/messages.html">Messages</a></li><li><a class="tocitem" href="../api/tools.html">Tools</a></li><li><a class="tocitem" href="../api/sessions.html">Sessions &amp; Context</a></li><li><a class="tocitem" href="../api/chat_client.html">Chat Client</a></li><li><a class="tocitem" href="../api/middleware.html">Middleware</a></li><li><a class="tocitem" href="../api/capabilities.html">Capabilities</a></li><li><a class="tocitem" href="../api/resilience.html">Resilience</a></li><li><a class="tocitem" href="../api/structured_output.html">Structured Output</a></li><li><a class="tocitem" href="../api/workflows.html">Workflows</a></li><li><a class="tocitem" href="../api/declarative.html">Declarative</a></li><li><a class="tocitem" href="../api/multimodal.html">Multimodal</a></li><li><a class="tocitem" href="../api/compaction.html">Compaction</a></li><li><a class="tocitem" href="../api/mcp.html">MCP</a></li><li><a class="tocitem" href="../api/evaluation.html">Evaluation</a></li><li><a class="tocitem" href="../api/skills.html">Skills</a></li><li><a class="tocitem" href="../api/handoffs.html">Handoffs</a></li><li><a class="tocitem" href="../api/telemetry.html">Telemetry</a></li><li><a class="tocitem" href="../api/serialization.html">Serialization</a></li><li><a class="tocitem" href="../api/exceptions.html">Exceptions</a></li></ul></li><li><span class="tocitem">Submodules</span><ul><li><a class="tocitem" href="../submodules/a2a.html">A2A Protocol</a></li><li><a class="tocitem" href="../submodules/hosting.html">Hosting</a></li><li><a class="tocitem" href="../submodules/mem0.html">Mem0 Integration</a></li><li><a class="tocitem" href="../submodules/bedrock.html">Bedrock</a></li><li><a class="tocitem" href="../submodules/coding_agents.html">Coding Agents</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Guide</a></li><li class="is-active"><a href="streaming.html">Streaming</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="streaming.html">Streaming</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Streaming"><a class="docs-heading-anchor" href="#Streaming">Streaming</a><a id="Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming" title="Permalink"></a></h1><p>Streaming lets you display LLM output in real time as tokens arrive, rather than waiting for the complete response. AgentFramework.jl uses Julia&#39;s <code>Channel</code> system for streaming, providing a natural iteration interface.</p><h2 id="Overview"><a class="docs-heading-anchor" href="#Overview">Overview</a><a id="Overview-1"></a><a class="docs-heading-anchor-permalink" href="#Overview" title="Permalink"></a></h2><p>There are two levels of streaming in AgentFramework.jl:</p><ol><li><strong>Agent-level streaming</strong> via <a href="../submodules/a2a.html#run_agent_streaming"><code>run_agent_streaming</code></a> — yields <a href="@ref"><code>AgentResponseUpdate</code></a> items</li><li><strong>Chat client-level streaming</strong> via <a href="../api/chat_client.html#AgentFramework.get_response_streaming"><code>get_response_streaming</code></a> — yields <a href="../api/chat_client.html#AgentFramework.ChatResponseUpdate"><code>ChatResponseUpdate</code></a> items</li></ol><p>Most users will use agent-level streaming, which handles the tool execution loop automatically.</p><h2 id="Basic-Streaming"><a class="docs-heading-anchor" href="#Basic-Streaming">Basic Streaming</a><a id="Basic-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Basic-Streaming" title="Permalink"></a></h2><h3 id="run*agent*streaming"><a class="docs-heading-anchor" href="#run*agent*streaming">run<em>agent</em>streaming</a><a id="run*agent*streaming-1"></a><a class="docs-heading-anchor-permalink" href="#run*agent*streaming" title="Permalink"></a></h3><p><a href="../submodules/a2a.html#run_agent_streaming"><code>run_agent_streaming</code></a> returns a <a href="../api/chat_client.html#AgentFramework.ResponseStream"><code>ResponseStream{AgentResponseUpdate}</code></a> that you iterate over:</p><pre><code class="language-julia hljs">using AgentFramework
+
+client = OllamaChatClient(model=&quot;qwen3:8b&quot;)
+agent = Agent(
+    name = &quot;Storyteller&quot;,
+    instructions = &quot;You are a creative storyteller.&quot;,
+    client = client,
+)
+
+# Start streaming
+stream = run_agent_streaming(agent, &quot;Tell me a short story about a robot.&quot;)
+
+# Print tokens as they arrive
+for update in stream
+    print(get_text(update))
+end
+println()  # Final newline</code></pre><h3 id="Getting-the-Final-Response"><a class="docs-heading-anchor" href="#Getting-the-Final-Response">Getting the Final Response</a><a id="Getting-the-Final-Response-1"></a><a class="docs-heading-anchor-permalink" href="#Getting-the-Final-Response" title="Permalink"></a></h3><p>After iterating, retrieve the complete <a href="agents.html#AgentResponse"><code>AgentResponse</code></a> with <a href="../api/agents.html#AgentFramework.get_final_response"><code>get_final_response</code></a>:</p><pre><code class="language-julia hljs">stream = run_agent_streaming(agent, &quot;Hello!&quot;)
+for update in stream
+    print(get_text(update))
+end
+println()
+
+# Get the aggregated response
+response = get_final_response(stream)
+println(&quot;Model: &quot;, response.model_id)
+println(&quot;Finish reason: &quot;, response.finish_reason)
+if response.usage_details !== nothing
+    println(&quot;Tokens: &quot;, response.usage_details.input_tokens, &quot; in / &quot;,
+            response.usage_details.output_tokens, &quot; out&quot;)
+end</code></pre><h2 id="AgentResponseUpdate"><a class="docs-heading-anchor" href="#AgentResponseUpdate">AgentResponseUpdate</a><a id="AgentResponseUpdate-1"></a><a class="docs-heading-anchor-permalink" href="#AgentResponseUpdate" title="Permalink"></a></h2><p>Each <a href="@ref"><code>AgentResponseUpdate</code></a> contains a chunk of the response:</p><pre><code class="language-julia hljs">stream = run_agent_streaming(agent, &quot;Hello!&quot;)
+for update in stream
+    # Text content (convenience accessor)
+    text = update.text
+
+    # Raw content items
+    for content in update.contents
+        if is_text(content)
+            print(get_text(content))
+        end
+    end
+
+    # Role (usually set on the first update)
+    if update.role !== nothing
+        println(&quot;Role: &quot;, update.role)
+    end
+
+    # Finish reason (set on the final update)
+    if update.finish_reason !== nothing
+        println(&quot;\nFinished: &quot;, update.finish_reason)
+    end
+
+    # Token usage (usually on the final update)
+    if update.usage_details !== nothing
+        println(&quot;Tokens used: &quot;, update.usage_details.output_tokens)
+    end
+end</code></pre><h2 id="Streaming-with-Tools"><a class="docs-heading-anchor" href="#Streaming-with-Tools">Streaming with Tools</a><a id="Streaming-with-Tools-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming-with-Tools" title="Permalink"></a></h2><p>When an agent has tools, streaming works seamlessly with the tool execution loop. Tool calls are assembled from streaming fragments, executed, and the results are sent back to the LLM — which then streams the final response:</p><pre><code class="language-julia hljs">@tool function get_weather(location::String)
+    &quot;Get weather for a location.&quot;
+    return &quot;Sunny, 22°C in $(location)&quot;
+end
+
+agent = Agent(
+    name = &quot;WeatherBot&quot;,
+    instructions = &quot;You are a weather assistant.&quot;,
+    client = client,
+    tools = [get_weather],
+)
+
+stream = run_agent_streaming(agent, &quot;What&#39;s the weather in Paris?&quot;)
+for update in stream
+    # During tool execution, updates may contain tool call content
+    # The final response text streams after tool results are processed
+    text = get_text(update)
+    if !isempty(text)
+        print(text)
+    end
+end
+println()</code></pre><h2 id="StreamingToolAccumulator"><a class="docs-heading-anchor" href="#StreamingToolAccumulator">StreamingToolAccumulator</a><a id="StreamingToolAccumulator-1"></a><a class="docs-heading-anchor-permalink" href="#StreamingToolAccumulator" title="Permalink"></a></h2><p>Under the hood, <a href="streaming.html#StreamingToolAccumulator"><code>StreamingToolAccumulator</code></a> assembles tool calls from streaming fragments. Tool calls arrive in pieces across multiple chunks:</p><ol><li>First chunk: tool call ID and function name</li><li>Subsequent chunks: argument JSON fragments</li><li>Framework accumulates all fragments into complete tool calls</li></ol><p>You typically don&#39;t interact with this directly, but it&#39;s available for custom streaming logic:</p><pre><code class="language-julia hljs">acc = StreamingToolAccumulator()
+
+# Accumulate fragments (normally done by the framework)
+accumulate_tool_call!(acc, 0, call_id=&quot;call_123&quot;, name=&quot;get_weather&quot;)
+accumulate_tool_call!(acc, 0, arguments_fragment=&quot;{\&quot;location\&quot;:&quot;)
+accumulate_tool_call!(acc, 0, arguments_fragment=&quot;\&quot;Paris\&quot;}&quot;)
+
+# Check state
+has_tool_calls(acc)            # true
+
+# Get completed tool calls as Content items
+tool_calls = get_accumulated_tool_calls(acc)
+
+# Reset for next iteration
+reset_accumulator!(acc)</code></pre><h2 id="Streaming-with-Sessions"><a class="docs-heading-anchor" href="#Streaming-with-Sessions">Streaming with Sessions</a><a id="Streaming-with-Sessions-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming-with-Sessions" title="Permalink"></a></h2><p>Streaming works with sessions for multi-turn conversations:</p><pre><code class="language-julia hljs">history = InMemoryHistoryProvider()
+agent = Agent(
+    name = &quot;ChatBot&quot;,
+    instructions = &quot;You are a friendly assistant.&quot;,
+    client = client,
+    context_providers = [history],
+)
+session = create_session(agent)
+
+# First turn — streaming
+stream = run_agent_streaming(agent, &quot;My name is Alice.&quot;, session=session)
+for update in stream
+    print(get_text(update))
+end
+println()
+
+# Second turn — history is preserved
+stream = run_agent_streaming(agent, &quot;What&#39;s my name?&quot;, session=session)
+for update in stream
+    print(get_text(update))
+end
+println()</code></pre><h2 id="Chat-Client-Level-Streaming"><a class="docs-heading-anchor" href="#Chat-Client-Level-Streaming">Chat Client-Level Streaming</a><a id="Chat-Client-Level-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Chat-Client-Level-Streaming" title="Permalink"></a></h2><p>For lower-level control, use <a href="../api/chat_client.html#AgentFramework.get_response_streaming"><code>get_response_streaming</code></a> directly on a chat client:</p><pre><code class="language-julia hljs">client = OllamaChatClient(model=&quot;qwen3:8b&quot;)
+messages = [Message(:user, &quot;Hello!&quot;)]
+options = ChatOptions()
+
+channel = get_response_streaming(client, messages, options)
+
+updates = ChatResponseUpdate[]
+for update in channel
+    push!(updates, update)
+    print(get_text(update))
+end
+println()
+
+# Build a complete ChatResponse from the collected updates
+response = ChatResponse(updates)
+println(&quot;Complete text: &quot;, response.text)</code></pre><h2 id="Example:-Streaming-with-Progress-Display"><a class="docs-heading-anchor" href="#Example:-Streaming-with-Progress-Display">Example: Streaming with Progress Display</a><a id="Example:-Streaming-with-Progress-Display-1"></a><a class="docs-heading-anchor-permalink" href="#Example:-Streaming-with-Progress-Display" title="Permalink"></a></h2><p>Here&#39;s a complete example with a progress display:</p><pre><code class="language-julia hljs">using AgentFramework
+
+client = OllamaChatClient(model=&quot;qwen3:8b&quot;)
+
+@tool function analyze_data(dataset::String)
+    &quot;Analyze a dataset and return summary statistics.&quot;
+    sleep(1)  # Simulate work
+    return &quot;Dataset &#39;$(dataset)&#39;: 1000 rows, 5 columns, mean=42.3, std=12.1&quot;
+end
+
+agent = Agent(
+    name = &quot;DataAnalyst&quot;,
+    instructions = &quot;You are a data analysis assistant. Use the analyze_data tool.&quot;,
+    client = client,
+    tools = [analyze_data],
+)
+
+println(&quot;🤖 Starting analysis...&quot;)
+stream = run_agent_streaming(agent, &quot;Analyze the sales dataset and explain the findings.&quot;)
+
+char_count = 0
+for update in stream
+    text = get_text(update)
+    if !isempty(text)
+        print(text)
+        char_count += length(text)
+    end
+end
+println(&quot;\n\n📊 Response: $(char_count) characters&quot;)
+
+response = get_final_response(stream)
+if response !== nothing &amp;&amp; response.usage_details !== nothing
+    usage = response.usage_details
+    println(&quot;📈 Tokens: $(something(usage.input_tokens, 0)) input, $(something(usage.output_tokens, 0)) output&quot;)
+end</code></pre><h2 id="Workflow-Streaming"><a class="docs-heading-anchor" href="#Workflow-Streaming">Workflow Streaming</a><a id="Workflow-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Workflow-Streaming" title="Permalink"></a></h2><p>Workflows also support streaming via event channels. See the <a href="@ref">Workflows</a> guide for details on streaming <a href="../api/workflows.html#AgentFramework.WorkflowEvent"><code>WorkflowEvent</code></a> items during multi-agent orchestration.</p><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="@ref">Agents</a> — Agent configuration that affects streaming behavior</li><li><a href="providers.html#Providers">Providers</a> — Provider-specific streaming capabilities</li><li><a href="@ref">Middleware</a> — How middleware interacts with streaming</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="providers.html">« Providers</a><a class="docs-footer-nextpage" href="advanced.html">Advanced Topics »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 14:18">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

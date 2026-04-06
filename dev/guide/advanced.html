@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Advanced Topics · AgentFramework.jl</title><meta name="title" content="Advanced Topics · AgentFramework.jl"/><meta property="og:title" content="Advanced Topics · AgentFramework.jl"/><meta property="twitter:title" content="Advanced Topics · AgentFramework.jl"/><meta name="description" content="Documentation for AgentFramework.jl."/><meta property="og:description" content="Documentation for AgentFramework.jl."/><meta property="twitter:description" content="Documentation for AgentFramework.jl."/><meta property="og:url" content="https://sdwfrost.github.io/AgentFramework.jl/guide/advanced.html"/><meta property="twitter:url" content="https://sdwfrost.github.io/AgentFramework.jl/guide/advanced.html"/><link rel="canonical" href="https://sdwfrost.github.io/AgentFramework.jl/guide/advanced.html"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">AgentFramework.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="getting_started.html">Getting Started</a></li><li><a class="tocitem" href="agents.html">Agents</a></li><li><a class="tocitem" href="tools.html">Tools</a></li><li><a class="tocitem" href="middleware.html">Middleware</a></li><li><a class="tocitem" href="sessions.html">Sessions &amp; Memory</a></li><li><a class="tocitem" href="workflows.html">Workflows</a></li><li><a class="tocitem" href="providers.html">Providers</a></li><li><a class="tocitem" href="streaming.html">Streaming</a></li><li class="is-active"><a class="tocitem" href="advanced.html">Advanced Topics</a><ul class="internal"><li><a class="tocitem" href="#Declarative-Agents-and-Workflows"><span>Declarative Agents and Workflows</span></a></li><li><a class="tocitem" href="#Message-Compaction"><span>Message Compaction</span></a></li><li><a class="tocitem" href="#Content-Filtering"><span>Content Filtering</span></a></li><li><a class="tocitem" href="#Multimodal-Content"><span>Multimodal Content</span></a></li><li><a class="tocitem" href="#Scoped-State-Management"><span>Scoped State Management</span></a></li><li><a class="tocitem" href="#Skills-Framework"><span>Skills Framework</span></a></li><li><a class="tocitem" href="#MCP-(Model-Context-Protocol)-Integration"><span>MCP (Model Context Protocol) Integration</span></a></li><li><a class="tocitem" href="#Evaluation-Framework"><span>Evaluation Framework</span></a></li><li><a class="tocitem" href="#Handoffs-Between-Agents"><span>Handoffs Between Agents</span></a></li><li><a class="tocitem" href="#Telemetry-and-Observability"><span>Telemetry and Observability</span></a></li><li><a class="tocitem" href="#Serialization-and-Persistence"><span>Serialization and Persistence</span></a></li><li><a class="tocitem" href="#Settings-Management"><span>Settings Management</span></a></li><li><a class="tocitem" href="#Structured-Output"><span>Structured Output</span></a></li><li><a class="tocitem" href="#Next-Steps"><span>Next Steps</span></a></li></ul></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/agents.html">Agents</a></li><li><a class="tocitem" href="../api/content.html">Content</a></li><li><a class="tocitem" href="../api/messages.html">Messages</a></li><li><a class="tocitem" href="../api/tools.html">Tools</a></li><li><a class="tocitem" href="../api/sessions.html">Sessions &amp; Context</a></li><li><a class="tocitem" href="../api/chat_client.html">Chat Client</a></li><li><a class="tocitem" href="../api/middleware.html">Middleware</a></li><li><a class="tocitem" href="../api/capabilities.html">Capabilities</a></li><li><a class="tocitem" href="../api/resilience.html">Resilience</a></li><li><a class="tocitem" href="../api/structured_output.html">Structured Output</a></li><li><a class="tocitem" href="../api/workflows.html">Workflows</a></li><li><a class="tocitem" href="../api/declarative.html">Declarative</a></li><li><a class="tocitem" href="../api/multimodal.html">Multimodal</a></li><li><a class="tocitem" href="../api/compaction.html">Compaction</a></li><li><a class="tocitem" href="../api/mcp.html">MCP</a></li><li><a class="tocitem" href="../api/evaluation.html">Evaluation</a></li><li><a class="tocitem" href="../api/skills.html">Skills</a></li><li><a class="tocitem" href="../api/handoffs.html">Handoffs</a></li><li><a class="tocitem" href="../api/telemetry.html">Telemetry</a></li><li><a class="tocitem" href="../api/serialization.html">Serialization</a></li><li><a class="tocitem" href="../api/exceptions.html">Exceptions</a></li></ul></li><li><span class="tocitem">Submodules</span><ul><li><a class="tocitem" href="../submodules/a2a.html">A2A Protocol</a></li><li><a class="tocitem" href="../submodules/hosting.html">Hosting</a></li><li><a class="tocitem" href="../submodules/mem0.html">Mem0 Integration</a></li><li><a class="tocitem" href="../submodules/bedrock.html">Bedrock</a></li><li><a class="tocitem" href="../submodules/coding_agents.html">Coding Agents</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Guide</a></li><li class="is-active"><a href="advanced.html">Advanced Topics</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="advanced.html">Advanced Topics</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Advanced-Topics"><a class="docs-heading-anchor" href="#Advanced-Topics">Advanced Topics</a><a id="Advanced-Topics-1"></a><a class="docs-heading-anchor-permalink" href="#Advanced-Topics" title="Permalink"></a></h1><p>This guide covers advanced features of AgentFramework.jl for power users and complex applications.</p><h2 id="Declarative-Agents-and-Workflows"><a class="docs-heading-anchor" href="#Declarative-Agents-and-Workflows">Declarative Agents and Workflows</a><a id="Declarative-Agents-and-Workflows-1"></a><a class="docs-heading-anchor-permalink" href="#Declarative-Agents-and-Workflows" title="Permalink"></a></h2><p>Define agents and workflows from YAML or JSON configuration files, enabling no-code agent definitions and version-controlled configurations.</p><h3 id="Declarative-Agents"><a class="docs-heading-anchor" href="#Declarative-Agents">Declarative Agents</a><a id="Declarative-Agents-1"></a><a class="docs-heading-anchor-permalink" href="#Declarative-Agents" title="Permalink"></a></h3><pre><code class="language-julia hljs">using AgentFramework
+
+# From YAML
+agent = agent_from_yaml(&quot;&quot;&quot;
+name: ResearchAssistant
+instructions: You are a research assistant. Provide well-sourced answers.
+model: qwen3:8b
+provider: ollama
+tools:
+  - search_web
+  - summarize
+&quot;&quot;&quot;)
+
+# From JSON
+agent = agent_from_json(&quot;&quot;&quot;{&quot;name&quot;: &quot;Helper&quot;, &quot;instructions&quot;: &quot;Be helpful.&quot;, &quot;model&quot;: &quot;qwen3:8b&quot;}&quot;&quot;&quot;)
+
+# From file (auto-detects format by extension)
+agent = agent_from_file(&quot;agents/researcher.yaml&quot;)
+
+# Serialize back
+yaml_str = agent_to_yaml(agent)
+agent_to_file(agent, &quot;agents/researcher.yaml&quot;)</code></pre><h3 id="Declarative-Workflows"><a class="docs-heading-anchor" href="#Declarative-Workflows">Declarative Workflows</a><a id="Declarative-Workflows-1"></a><a class="docs-heading-anchor-permalink" href="#Declarative-Workflows" title="Permalink"></a></h3><pre><code class="language-julia hljs">workflow = workflow_from_yaml(&quot;&quot;&quot;
+name: ReviewPipeline
+executors:
+  - id: analyzer
+    handler: analyze_handler
+  - id: reviewer
+    handler: review_handler
+edges:
+  - source: analyzer
+    target: reviewer
+start: analyzer
+outputs: [reviewer]
+&quot;&quot;&quot;)
+
+# Register handlers before loading
+register_handler!(&quot;analyze_handler&quot;, (data, ctx) -&gt; send_message(ctx, analyze(data)))
+register_handler!(&quot;review_handler&quot;, (data, ctx) -&gt; yield_output(ctx, review(data)))</code></pre><p>Use <a href="../api/declarative.html#AgentFramework.register_handler!"><code>register_handler!</code></a>, <a href="../api/declarative.html#AgentFramework.register_tool!"><code>register_tool!</code></a>, <a href="../api/declarative.html#AgentFramework.register_client!"><code>register_client!</code></a>, and <a href="../api/declarative.html#AgentFramework.register_context_provider!"><code>register_context_provider!</code></a> to make components available for declarative loading.</p><h2 id="Message-Compaction"><a class="docs-heading-anchor" href="#Message-Compaction">Message Compaction</a><a id="Message-Compaction-1"></a><a class="docs-heading-anchor-permalink" href="#Message-Compaction" title="Permalink"></a></h2><p>For long conversations that exceed context window limits, AgentFramework.jl provides several compaction strategies:</p><pre><code class="language-julia hljs">using AgentFramework
+
+config = CompactionConfig(
+    strategy = SLIDING_WINDOW,    # Keep only recent messages
+    max_tokens = 4096,            # Token budget
+    window_size = 20,             # Number of recent messages to keep
+)
+
+# Or use a compaction pipeline with multiple strategies
+pipeline = CompactionPipeline([
+    CompactionConfig(strategy=SELECTIVE_TOOL_CALL),   # First: compact tool calls
+    CompactionConfig(strategy=SLIDING_WINDOW, window_size=30),  # Then: sliding window
+])
+
+# Check if compaction is needed
+if needs_compaction(messages, config)
+    compacted = compact_messages(messages, config)
+end</code></pre><h3 id="Available-Strategies"><a class="docs-heading-anchor" href="#Available-Strategies">Available Strategies</a><a id="Available-Strategies-1"></a><a class="docs-heading-anchor-permalink" href="#Available-Strategies" title="Permalink"></a></h3><table><tr><th style="text-align: left">Strategy</th><th style="text-align: left">Description</th></tr><tr><td style="text-align: left"><code>NO_COMPACTION</code></td><td style="text-align: left">No compaction (default)</td></tr><tr><td style="text-align: left"><code>SLIDING_WINDOW</code></td><td style="text-align: left">Keep only the N most recent messages</td></tr><tr><td style="text-align: left"><code>DROP_OLDEST</code></td><td style="text-align: left">Drop the oldest messages to fit token budget</td></tr><tr><td style="text-align: left"><code>SUMMARIZE_OLDEST</code></td><td style="text-align: left">Summarize older messages into a single message</td></tr><tr><td style="text-align: left"><code>TRUNCATE</code></td><td style="text-align: left">Truncate individual message content</td></tr><tr><td style="text-align: left"><code>SELECTIVE_TOOL_CALL</code></td><td style="text-align: left">Compact verbose tool call/result pairs</td></tr><tr><td style="text-align: left"><code>TOOL_RESULT_ONLY</code></td><td style="text-align: left">Replace tool calls with just their results</td></tr></table><h3 id="Token-Estimation"><a class="docs-heading-anchor" href="#Token-Estimation">Token Estimation</a><a id="Token-Estimation-1"></a><a class="docs-heading-anchor-permalink" href="#Token-Estimation" title="Permalink"></a></h3><pre><code class="language-julia hljs">tokens = estimate_tokens(&quot;Hello, world!&quot;)
+msg_tokens = estimate_message_tokens(message)
+total = estimate_messages_tokens(messages)</code></pre><h2 id="Content-Filtering"><a class="docs-heading-anchor" href="#Content-Filtering">Content Filtering</a><a id="Content-Filtering-1"></a><a class="docs-heading-anchor-permalink" href="#Content-Filtering" title="Permalink"></a></h2><p>Parse and handle content filter results from providers:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Check filter results
+results = ContentFilterResults(...)
+if is_blocked(results)
+    categories = get_filtered_categories(results)
+    severity = max_severity(results)
+    @warn &quot;Content blocked&quot; categories severity
+end</code></pre><h3 id="Severity-Levels"><a class="docs-heading-anchor" href="#Severity-Levels">Severity Levels</a><a id="Severity-Levels-1"></a><a class="docs-heading-anchor-permalink" href="#Severity-Levels" title="Permalink"></a></h3><table><tr><th style="text-align: left">Level</th><th style="text-align: left">Constant</th></tr><tr><td style="text-align: left">Safe</td><td style="text-align: left"><code>FILTER_SAFE</code></td></tr><tr><td style="text-align: left">Low</td><td style="text-align: left"><code>FILTER_LOW</code></td></tr><tr><td style="text-align: left">Medium</td><td style="text-align: left"><code>FILTER_MEDIUM</code></td></tr><tr><td style="text-align: left">High</td><td style="text-align: left"><code>FILTER_HIGH</code></td></tr></table><h3 id="Filter-Categories"><a class="docs-heading-anchor" href="#Filter-Categories">Filter Categories</a><a id="Filter-Categories-1"></a><a class="docs-heading-anchor-permalink" href="#Filter-Categories" title="Permalink"></a></h3><p><code>FILTER_HATE</code>, <code>FILTER_SELF_HARM</code>, <code>FILTER_SEXUAL</code>, <code>FILTER_VIOLENCE</code>, <code>FILTER_PROFANITY</code>, <code>FILTER_JAILBREAK</code>, <code>FILTER_PROTECTED_MATERIAL</code>, <code>FILTER_CUSTOM</code></p><h2 id="Multimodal-Content"><a class="docs-heading-anchor" href="#Multimodal-Content">Multimodal Content</a><a id="Multimodal-Content-1"></a><a class="docs-heading-anchor-permalink" href="#Multimodal-Content" title="Permalink"></a></h2><p>Send images and audio to models that support them:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Image from file
+img = image_content(&quot;photo.jpg&quot;)
+
+# Image from URL
+img_url = image_url_content(&quot;https://example.com/photo.jpg&quot;, &quot;image/jpeg&quot;)
+
+# Image from base64
+img_b64 = image_content(base64_data, &quot;image/png&quot;)
+
+# Audio
+audio = audio_content(&quot;recording.wav&quot;)
+
+# Include in a message
+msg = Message(:user, [text_content(&quot;What&#39;s in this image?&quot;), img])
+response = run_agent(agent, msg)</code></pre><p>Helper functions:</p><table><tr><th style="text-align: left">Function</th><th style="text-align: left">Description</th></tr><tr><td style="text-align: left"><a href="../api/multimodal.html#AgentFramework.image_content"><code>image_content</code></a></td><td style="text-align: left">Create image content from file or base64</td></tr><tr><td style="text-align: left"><a href="../api/multimodal.html#AgentFramework.image_url_content"><code>image_url_content</code></a></td><td style="text-align: left">Reference an image by URL</td></tr><tr><td style="text-align: left"><a href="../api/multimodal.html#AgentFramework.audio_content"><code>audio_content</code></a></td><td style="text-align: left">Create audio content from file or data</td></tr><tr><td style="text-align: left"><a href="../api/multimodal.html#AgentFramework.file_content"><code>file_content</code></a></td><td style="text-align: left">Generic file content</td></tr><tr><td style="text-align: left"><a href="../api/multimodal.html#AgentFramework.detect_mime_type"><code>detect_mime_type</code></a></td><td style="text-align: left">Detect MIME type from file path</td></tr></table><h2 id="Scoped-State-Management"><a class="docs-heading-anchor" href="#Scoped-State-Management">Scoped State Management</a><a id="Scoped-State-Management-1"></a><a class="docs-heading-anchor-permalink" href="#Scoped-State-Management" title="Permalink"></a></h2><p>Scoped state provides hierarchical state management for workflows:</p><pre><code class="language-julia hljs">using AgentFramework
+
+store = ScopedStateStore()
+
+# Local state (per-executor)
+set_local!(store, &quot;executor_1&quot;, &quot;counter&quot;, 0)
+val = get_local(store, &quot;executor_1&quot;, &quot;counter&quot;)
+
+# Broadcast state (visible to all executors)
+set_broadcast!(store, &quot;shared_config&quot;, Dict(&quot;mode&quot; =&gt; &quot;fast&quot;))
+config = get_broadcast(store, &quot;shared_config&quot;)
+
+# Workflow-level state
+set_workflow_state!(store, &quot;phase&quot;, &quot;planning&quot;)
+phase = get_workflow_state(store, &quot;phase&quot;)</code></pre><h3 id="State-Scopes"><a class="docs-heading-anchor" href="#State-Scopes">State Scopes</a><a id="State-Scopes-1"></a><a class="docs-heading-anchor-permalink" href="#State-Scopes" title="Permalink"></a></h3><table><tr><th style="text-align: left">Scope</th><th style="text-align: left">Constant</th><th style="text-align: left">Visibility</th></tr><tr><td style="text-align: left">Local</td><td style="text-align: left"><code>SCOPE_LOCAL</code></td><td style="text-align: left">Single executor only</td></tr><tr><td style="text-align: left">Broadcast</td><td style="text-align: left"><code>SCOPE_BROADCAST</code></td><td style="text-align: left">All executors</td></tr><tr><td style="text-align: left">Workflow</td><td style="text-align: left"><code>SCOPE_WORKFLOW</code></td><td style="text-align: left">Workflow-level state</td></tr></table><h2 id="Skills-Framework"><a class="docs-heading-anchor" href="#Skills-Framework">Skills Framework</a><a id="Skills-Framework-1"></a><a class="docs-heading-anchor-permalink" href="#Skills-Framework" title="Permalink"></a></h2><p>Skills are reusable bundles of instructions, tools, and resources:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Load skills from a directory
+source = DirectorySkillSource(directory=&quot;skills/&quot;)
+skills = load_skills!(source)
+
+# Create a skills provider for agents
+provider = SkillsProvider(source=source)
+agent = Agent(
+    client = client,
+    context_providers = [provider],
+)</code></pre><h3 id="Skill-Structure"><a class="docs-heading-anchor" href="#Skill-Structure">Skill Structure</a><a id="Skill-Structure-1"></a><a class="docs-heading-anchor-permalink" href="#Skill-Structure" title="Permalink"></a></h3><p>Skills are defined in Markdown files:</p><pre><code class="language-markdown hljs"># Web Search
+
+Search the web for information.
+
+## Instructions
+
+When the user asks a question, search the web first.
+
+## Tools
+
+- search_web
+- summarize_results</code></pre><h3 id="Skill-Sources"><a class="docs-heading-anchor" href="#Skill-Sources">Skill Sources</a><a id="Skill-Sources-1"></a><a class="docs-heading-anchor-permalink" href="#Skill-Sources" title="Permalink"></a></h3><table><tr><th style="text-align: left">Source</th><th style="text-align: left">Description</th></tr><tr><td style="text-align: left"><a href="../api/skills.html#AgentFramework.StaticSkillSource"><code>StaticSkillSource</code></a></td><td style="text-align: left">Fixed list of skills</td></tr><tr><td style="text-align: left"><a href="../api/skills.html#AgentFramework.DirectorySkillSource"><code>DirectorySkillSource</code></a></td><td style="text-align: left">Load from a directory</td></tr><tr><td style="text-align: left"><a href="../api/skills.html#AgentFramework.DeduplicatingSkillSource"><code>DeduplicatingSkillSource</code></a></td><td style="text-align: left">Deduplicate across sources</td></tr><tr><td style="text-align: left"><a href="../api/skills.html#AgentFramework.FilteringSkillSource"><code>FilteringSkillSource</code></a></td><td style="text-align: left">Filter skills by criteria</td></tr><tr><td style="text-align: left"><a href="../api/skills.html#AgentFramework.AggregatingSkillSource"><code>AggregatingSkillSource</code></a></td><td style="text-align: left">Combine multiple sources</td></tr></table><h2 id="MCP-(Model-Context-Protocol)-Integration"><a class="docs-heading-anchor" href="#MCP-(Model-Context-Protocol)-Integration">MCP (Model Context Protocol) Integration</a><a id="MCP-(Model-Context-Protocol)-Integration-1"></a><a class="docs-heading-anchor-permalink" href="#MCP-(Model-Context-Protocol)-Integration" title="Permalink"></a></h2><p>Connect to external tool servers via the Model Context Protocol:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Connect via stdio
+mcp_client = StdioMCPClient(command=&quot;npx&quot;, args=[&quot;-y&quot;, &quot;@modelcontextprotocol/server-filesystem&quot;])
+connect!(mcp_client)
+
+# List available tools
+tools = list_tools(mcp_client)
+
+# Convert MCP tools to FunctionTools for use with agents
+function_tools = mcp_tools_to_function_tools(mcp_client)
+
+agent = Agent(
+    client = client,
+    tools = function_tools,
+)
+
+# Or use the convenience helper
+agent = Agent(client=client)
+with_mcp_client(agent, mcp_client)
+
+# Clean up
+close_mcp!(mcp_client)</code></pre><h3 id="HTTP-MCP-Client"><a class="docs-heading-anchor" href="#HTTP-MCP-Client">HTTP MCP Client</a><a id="HTTP-MCP-Client-1"></a><a class="docs-heading-anchor-permalink" href="#HTTP-MCP-Client" title="Permalink"></a></h3><pre><code class="language-julia hljs">mcp_client = HTTPMCPClient(url=&quot;http://localhost:3000/mcp&quot;)
+connect!(mcp_client)</code></pre><h3 id="MCP-Resources-and-Prompts"><a class="docs-heading-anchor" href="#MCP-Resources-and-Prompts">MCP Resources and Prompts</a><a id="MCP-Resources-and-Prompts-1"></a><a class="docs-heading-anchor-permalink" href="#MCP-Resources-and-Prompts" title="Permalink"></a></h3><pre><code class="language-julia hljs"># List and read resources
+resources = list_resources(mcp_client)
+content = read_resource(mcp_client, &quot;file:///path/to/resource&quot;)
+
+# List and use prompts
+prompts = list_prompts(mcp_client)
+prompt = get_prompt(mcp_client, &quot;my_prompt&quot;, Dict(&quot;arg&quot; =&gt; &quot;value&quot;))</code></pre><h2 id="Evaluation-Framework"><a class="docs-heading-anchor" href="#Evaluation-Framework">Evaluation Framework</a><a id="Evaluation-Framework-1"></a><a class="docs-heading-anchor-permalink" href="#Evaluation-Framework" title="Permalink"></a></h2><p>Test agent quality with assertion-based evaluation:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Define evaluation items
+items = [
+    EvalItem(
+        input = [Message(:user, &quot;What is 2+2?&quot;)],
+        expected = &quot;4&quot;,
+        checks = [keyword_check([&quot;4&quot;])],
+    ),
+    EvalItem(
+        input = [Message(:user, &quot;Search for Julia programming&quot;)],
+        expected = nothing,
+        checks = [tool_called_check(&quot;search_web&quot;)],
+    ),
+]
+
+# Evaluate an agent
+results = evaluate_agent(agent, items)
+
+# Check results
+println(&quot;Passed: $(eval_passed(results)) / $(eval_total(results))&quot;)
+if !all_passed(results)
+    for item_result in results.items
+        if is_failed(item_result)
+            println(&quot;Failed: &quot;, item_result.input)
+        end
+    end
+end</code></pre><h3 id="Available-Checks"><a class="docs-heading-anchor" href="#Available-Checks">Available Checks</a><a id="Available-Checks-1"></a><a class="docs-heading-anchor-permalink" href="#Available-Checks" title="Permalink"></a></h3><table><tr><th style="text-align: left">Check</th><th style="text-align: left">Description</th></tr><tr><td style="text-align: left"><a href="../api/evaluation.html#AgentFramework.keyword_check"><code>keyword_check</code></a></td><td style="text-align: left">Response contains expected keywords</td></tr><tr><td style="text-align: left"><a href="../api/evaluation.html#AgentFramework.tool_called_check"><code>tool_called_check</code></a></td><td style="text-align: left">A specific tool was called</td></tr><tr><td style="text-align: left"><a href="../api/evaluation.html#AgentFramework.tool_calls_present"><code>tool_calls_present</code></a></td><td style="text-align: left">Any tool calls were made</td></tr><tr><td style="text-align: left"><a href="../api/evaluation.html#AgentFramework.tool_call_args_match"><code>tool_call_args_match</code></a></td><td style="text-align: left">Tool call arguments match expectations</td></tr></table><h3 id="Evaluating-Workflows"><a class="docs-heading-anchor" href="#Evaluating-Workflows">Evaluating Workflows</a><a id="Evaluating-Workflows-1"></a><a class="docs-heading-anchor-permalink" href="#Evaluating-Workflows" title="Permalink"></a></h3><pre><code class="language-julia hljs">results = evaluate_workflow(workflow, items)</code></pre><h2 id="Handoffs-Between-Agents"><a class="docs-heading-anchor" href="#Handoffs-Between-Agents">Handoffs Between Agents</a><a id="Handoffs-Between-Agents-1"></a><a class="docs-heading-anchor-permalink" href="#Handoffs-Between-Agents" title="Permalink"></a></h2><p>Handoffs enable one agent to transfer control to another:</p><pre><code class="language-julia hljs">using AgentFramework
+
+transfer_tool = HandoffTool(
+    target_agent = specialist_agent,
+    description = &quot;Transfer to the specialist for technical questions.&quot;,
+)
+
+main_agent = Agent(
+    client = client,
+    instructions = &quot;Route technical questions to the specialist.&quot;,
+    tools = [transfer_tool],
+)
+
+# normalize_agent_tools converts HandoffTools to FunctionTools for the LLM
+tools = normalize_agent_tools(main_agent.tools)</code></pre><h2 id="Telemetry-and-Observability"><a class="docs-heading-anchor" href="#Telemetry-and-Observability">Telemetry and Observability</a><a id="Telemetry-and-Observability-1"></a><a class="docs-heading-anchor-permalink" href="#Telemetry-and-Observability" title="Permalink"></a></h2><p>AgentFramework.jl provides OpenTelemetry-aligned telemetry:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Use the in-memory backend for testing
+backend = InMemoryTelemetryBackend()
+
+# Instrument an agent
+instrument!(agent, backend)
+
+# Or add telemetry middleware manually
+agent = Agent(
+    client = client,
+    agent_middlewares = [telemetry_agent_middleware(backend)],
+    chat_middlewares = [telemetry_chat_middleware(backend)],
+    function_middlewares = [telemetry_function_middleware(backend)],
+)
+
+# After running the agent, inspect spans
+spans = get_spans(backend)
+for span in spans
+    println(&quot;$(span.name): $(duration_ms(span))ms&quot;)
+end
+
+# Clean up
+clear_spans!(backend)</code></pre><h3 id="Telemetry-Spans"><a class="docs-heading-anchor" href="#Telemetry-Spans">Telemetry Spans</a><a id="Telemetry-Spans-1"></a><a class="docs-heading-anchor-permalink" href="#Telemetry-Spans" title="Permalink"></a></h3><p>Each <a href="../api/telemetry.html#AgentFramework.TelemetrySpan"><code>TelemetrySpan</code></a> records:</p><ul><li>Operation name and duration</li><li>Events and attributes</li><li>Parent-child relationships</li></ul><h2 id="Serialization-and-Persistence"><a class="docs-heading-anchor" href="#Serialization-and-Persistence">Serialization and Persistence</a><a id="Serialization-and-Persistence-1"></a><a class="docs-heading-anchor-permalink" href="#Serialization-and-Persistence" title="Permalink"></a></h2><p>Serialize agents, messages, and sessions for storage or transmission:</p><pre><code class="language-julia hljs">using AgentFramework
+
+# Messages
+json = serialize_to_json(messages)
+messages = deserialize_from_json(json)
+
+# Sessions
+dict = serialize_to_dict(session)
+session = deserialize_from_dict(AgentSession, dict)
+
+# Register custom types for serialization
+register_type!(MyCustomType)
+register_state_type!(MyStateType)</code></pre><h2 id="Settings-Management"><a class="docs-heading-anchor" href="#Settings-Management">Settings Management</a><a id="Settings-Management-1"></a><a class="docs-heading-anchor-permalink" href="#Settings-Management" title="Permalink"></a></h2><p>Load configuration from environment variables, <code>.env</code> files, or TOML:</p><pre><code class="language-julia hljs">using AgentFramework
+
+settings = Settings()
+load_from_env!(settings)
+load_from_dotenv!(settings, &quot;.env&quot;)
+load_from_toml!(settings, &quot;config.toml&quot;)
+
+api_key = get_secret(settings, &quot;OPENAI_API_KEY&quot;)
+model = get_setting(settings, &quot;MODEL&quot;, &quot;qwen3:8b&quot;)</code></pre><p><a href="@ref"><code>SecretString</code></a> wraps sensitive values to prevent accidental logging.</p><h2 id="Structured-Output"><a class="docs-heading-anchor" href="#Structured-Output">Structured Output</a><a id="Structured-Output-1"></a><a class="docs-heading-anchor-permalink" href="#Structured-Output" title="Permalink"></a></h2><p>Parse LLM responses into typed structs:</p><pre><code class="language-julia hljs">using AgentFramework
+
+Base.@kwdef struct Recipe
+    name::String
+    ingredients::Vector{String}
+    steps::Vector{String}
+    prep_time_minutes::Int
+end
+
+# Generate JSON Schema from type
+schema = schema_from_type(Recipe)
+
+# Parse agent response into struct
+result = run_agent(Recipe, agent, &quot;Give me a recipe for chocolate cake&quot;)
+recipe = result.value
+println(recipe.name)
+println(recipe.ingredients)</code></pre><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="../api/agents.html">API Reference</a> — Complete API documentation for all types and functions</li><li><a href="@ref">Workflows</a> — Multi-agent orchestration patterns</li><li><a href="providers.html#Providers">Providers</a> — Provider-specific advanced features</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="streaming.html">« Streaming</a><a class="docs-footer-nextpage" href="../api/agents.html">Agents »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 14:18">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Middleware · AgentFramework.jl</title><meta name="title" content="Middleware · AgentFramework.jl"/><meta property="og:title" content="Middleware · AgentFramework.jl"/><meta property="twitter:title" content="Middleware · AgentFramework.jl"/><meta name="description" content="Documentation for AgentFramework.jl."/><meta property="og:description" content="Documentation for AgentFramework.jl."/><meta property="twitter:description" content="Documentation for AgentFramework.jl."/><meta property="og:url" content="https://sdwfrost.github.io/AgentFramework.jl/guide/middleware.html"/><meta property="twitter:url" content="https://sdwfrost.github.io/AgentFramework.jl/guide/middleware.html"/><link rel="canonical" href="https://sdwfrost.github.io/AgentFramework.jl/guide/middleware.html"/><script data-outdated-warner src="../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL=".."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../assets/documenter.js"></script><script src="../search_index.js"></script><script src="../siteinfo.js"></script><script src="../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../index.html">AgentFramework.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../index.html">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="getting_started.html">Getting Started</a></li><li><a class="tocitem" href="agents.html">Agents</a></li><li><a class="tocitem" href="tools.html">Tools</a></li><li class="is-active"><a class="tocitem" href="middleware.html">Middleware</a><ul class="internal"><li><a class="tocitem" href="#Three-Middleware-Layers"><span>Three Middleware Layers</span></a></li><li><a class="tocitem" href="#Context-Types"><span>Context Types</span></a></li><li><a class="tocitem" href="#Creating-Middleware-Functions"><span>Creating Middleware Functions</span></a></li><li><a class="tocitem" href="#The-@middleware-Macro"><span>The @middleware Macro</span></a></li><li><a class="tocitem" href="#Middleware-Pipeline-Ordering"><span>Middleware Pipeline Ordering</span></a></li><li><a class="tocitem" href="#Common-Patterns"><span>Common Patterns</span></a></li><li><a class="tocitem" href="#MiddlewareTermination"><span>MiddlewareTermination</span></a></li><li><a class="tocitem" href="#Built-in-Middleware"><span>Built-in Middleware</span></a></li><li><a class="tocitem" href="#Applying-Middleware-Programmatically"><span>Applying Middleware Programmatically</span></a></li><li><a class="tocitem" href="#Next-Steps"><span>Next Steps</span></a></li></ul></li><li><a class="tocitem" href="sessions.html">Sessions &amp; Memory</a></li><li><a class="tocitem" href="workflows.html">Workflows</a></li><li><a class="tocitem" href="providers.html">Providers</a></li><li><a class="tocitem" href="streaming.html">Streaming</a></li><li><a class="tocitem" href="advanced.html">Advanced Topics</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../api/agents.html">Agents</a></li><li><a class="tocitem" href="../api/content.html">Content</a></li><li><a class="tocitem" href="../api/messages.html">Messages</a></li><li><a class="tocitem" href="../api/tools.html">Tools</a></li><li><a class="tocitem" href="../api/sessions.html">Sessions &amp; Context</a></li><li><a class="tocitem" href="../api/chat_client.html">Chat Client</a></li><li><a class="tocitem" href="../api/middleware.html">Middleware</a></li><li><a class="tocitem" href="../api/capabilities.html">Capabilities</a></li><li><a class="tocitem" href="../api/resilience.html">Resilience</a></li><li><a class="tocitem" href="../api/structured_output.html">Structured Output</a></li><li><a class="tocitem" href="../api/workflows.html">Workflows</a></li><li><a class="tocitem" href="../api/declarative.html">Declarative</a></li><li><a class="tocitem" href="../api/multimodal.html">Multimodal</a></li><li><a class="tocitem" href="../api/compaction.html">Compaction</a></li><li><a class="tocitem" href="../api/mcp.html">MCP</a></li><li><a class="tocitem" href="../api/evaluation.html">Evaluation</a></li><li><a class="tocitem" href="../api/skills.html">Skills</a></li><li><a class="tocitem" href="../api/handoffs.html">Handoffs</a></li><li><a class="tocitem" href="../api/telemetry.html">Telemetry</a></li><li><a class="tocitem" href="../api/serialization.html">Serialization</a></li><li><a class="tocitem" href="../api/exceptions.html">Exceptions</a></li></ul></li><li><span class="tocitem">Submodules</span><ul><li><a class="tocitem" href="../submodules/a2a.html">A2A Protocol</a></li><li><a class="tocitem" href="../submodules/hosting.html">Hosting</a></li><li><a class="tocitem" href="../submodules/mem0.html">Mem0 Integration</a></li><li><a class="tocitem" href="../submodules/bedrock.html">Bedrock</a></li><li><a class="tocitem" href="../submodules/coding_agents.html">Coding Agents</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Guide</a></li><li class="is-active"><a href="middleware.html">Middleware</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href="middleware.html">Middleware</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Middleware"><a class="docs-heading-anchor" href="#Middleware">Middleware</a><a id="Middleware-1"></a><a class="docs-heading-anchor-permalink" href="#Middleware" title="Permalink"></a></h1><p>Middleware provides a composable way to intercept and modify behavior at three levels of the agent pipeline. Each middleware layer follows the same pattern: receive a context and a <code>next</code> function, optionally modify the context, call <code>next</code> to proceed, and optionally modify the result.</p><h2 id="Three-Middleware-Layers"><a class="docs-heading-anchor" href="#Three-Middleware-Layers">Three Middleware Layers</a><a id="Three-Middleware-Layers-1"></a><a class="docs-heading-anchor-permalink" href="#Three-Middleware-Layers" title="Permalink"></a></h2><p>AgentFramework.jl has three middleware layers, each wrapping a different part of the pipeline:</p><pre><code class="nohighlight hljs">┌─ Agent Middleware ──────────────────────────────────────────────┐
+│  Wraps the entire run_agent() call                             │
+│                                                                │
+│  ┌─ Chat Middleware ────────────────────────────────────────┐   │
+│  │  Wraps each LLM service call (may run multiple times    │   │
+│  │  in a tool loop)                                        │   │
+│  │                                                         │   │
+│  │  ┌─ Function Middleware ─────────────────────────────┐   │   │
+│  │  │  Wraps each individual tool invocation            │   │   │
+│  │  └──────────────────────────────────────────────────┘   │   │
+│  └─────────────────────────────────────────────────────────┘   │
+└────────────────────────────────────────────────────────────────┘</code></pre><table><tr><th style="text-align: left">Layer</th><th style="text-align: left">Context Type</th><th style="text-align: left">Wraps</th><th style="text-align: left">Use Cases</th></tr><tr><td style="text-align: left">Agent</td><td style="text-align: left"><a href="middleware.html#AgentContext"><code>AgentContext</code></a></td><td style="text-align: left">Entire <code>run_agent()</code> call</td><td style="text-align: left">Logging, telemetry, auth, caching</td></tr><tr><td style="text-align: left">Chat</td><td style="text-align: left"><a href="middleware.html#ChatContext"><code>ChatContext</code></a></td><td style="text-align: left">Each LLM service call</td><td style="text-align: left">Retry, rate limiting, request/response transforms</td></tr><tr><td style="text-align: left">Function</td><td style="text-align: left"><a href="middleware.html#FunctionInvocationContext"><code>FunctionInvocationContext</code></a></td><td style="text-align: left">Each tool invocation</td><td style="text-align: left">Validation, sandboxing, result caching</td></tr></table><h2 id="Context-Types"><a class="docs-heading-anchor" href="#Context-Types">Context Types</a><a id="Context-Types-1"></a><a class="docs-heading-anchor-permalink" href="#Context-Types" title="Permalink"></a></h2><h3 id="AgentContext"><a class="docs-heading-anchor" href="#AgentContext">AgentContext</a><a id="AgentContext-1"></a><a class="docs-heading-anchor-permalink" href="#AgentContext" title="Permalink"></a></h3><p><a href="middleware.html#AgentContext"><code>AgentContext</code></a> is passed through the agent middleware pipeline:</p><pre><code class="language-julia hljs">Base.@kwdef mutable struct AgentContext
+    agent::Any                              # The agent being invoked
+    messages::Vector{Message}               # Input messages
+    session::Union{Nothing, AgentSession}   # Current session
+    options::Dict{String, Any}              # Agent run options
+    stream::Bool                            # Whether this is streaming
+    metadata::Dict{String, Any}            # Shared data between middleware
+    result::Any                             # Set after execution
+end</code></pre><h3 id="ChatContext"><a class="docs-heading-anchor" href="#ChatContext">ChatContext</a><a id="ChatContext-1"></a><a class="docs-heading-anchor-permalink" href="#ChatContext" title="Permalink"></a></h3><p><a href="middleware.html#ChatContext"><code>ChatContext</code></a> is passed through the chat middleware pipeline:</p><pre><code class="language-julia hljs">Base.@kwdef mutable struct ChatContext
+    messages::Vector{Message}               # Messages sent to the LLM
+    options::ChatOptions                    # Chat options for this request
+    stream::Bool                            # Whether this is streaming
+    metadata::Dict{String, Any}            # Shared data between middleware
+    result::Any                             # Chat response (set after next())
+end</code></pre><h3 id="FunctionInvocationContext"><a class="docs-heading-anchor" href="#FunctionInvocationContext">FunctionInvocationContext</a><a id="FunctionInvocationContext-1"></a><a class="docs-heading-anchor-permalink" href="#FunctionInvocationContext" title="Permalink"></a></h3><p><a href="middleware.html#FunctionInvocationContext"><code>FunctionInvocationContext</code></a> is passed through the function middleware pipeline:</p><pre><code class="language-julia hljs">Base.@kwdef mutable struct FunctionInvocationContext
+    tool::Union{Nothing, FunctionTool}      # The tool being invoked
+    arguments::Dict{String, Any}            # Parsed function arguments
+    call_id::String                         # Tool call ID from the LLM
+    metadata::Dict{String, Any}            # Shared data between middleware
+    result::Any                             # Function result (set after next())
+end</code></pre><h2 id="Creating-Middleware-Functions"><a class="docs-heading-anchor" href="#Creating-Middleware-Functions">Creating Middleware Functions</a><a id="Creating-Middleware-Functions-1"></a><a class="docs-heading-anchor-permalink" href="#Creating-Middleware-Functions" title="Permalink"></a></h2><p>A middleware function takes <code>(context, next)</code> and must call <code>next(context)</code> to continue the pipeline:</p><h3 id="Agent-Middleware"><a class="docs-heading-anchor" href="#Agent-Middleware">Agent Middleware</a><a id="Agent-Middleware-1"></a><a class="docs-heading-anchor-permalink" href="#Agent-Middleware" title="Permalink"></a></h3><pre><code class="language-julia hljs">function logging_agent_middleware(ctx::AgentContext, next::Function)
+    @info &quot;Agent invoked&quot; agent=ctx.agent.name messages=length(ctx.messages)
+    start = time()
+
+    result = next(ctx)  # Continue the pipeline
+
+    elapsed = time() - start
+    @info &quot;Agent completed&quot; duration=elapsed
+    return result
+end
+
+agent = Agent(
+    client = client,
+    agent_middlewares = [logging_agent_middleware],
+)</code></pre><h3 id="Chat-Middleware"><a class="docs-heading-anchor" href="#Chat-Middleware">Chat Middleware</a><a id="Chat-Middleware-1"></a><a class="docs-heading-anchor-permalink" href="#Chat-Middleware" title="Permalink"></a></h3><pre><code class="language-julia hljs">function token_logging_middleware(ctx::ChatContext, next::Function)
+    @info &quot;Sending $(length(ctx.messages)) messages to LLM&quot;
+
+    result = next(ctx)  # Call the LLM
+
+    if result isa ChatResponse &amp;&amp; result.usage_details !== nothing
+        @info &quot;Token usage&quot; input=result.usage_details.input_tokens output=result.usage_details.output_tokens
+    end
+    return result
+end
+
+agent = Agent(
+    client = client,
+    chat_middlewares = [token_logging_middleware],
+)</code></pre><h3 id="Function-Middleware"><a class="docs-heading-anchor" href="#Function-Middleware">Function Middleware</a><a id="Function-Middleware-1"></a><a class="docs-heading-anchor-permalink" href="#Function-Middleware" title="Permalink"></a></h3><pre><code class="language-julia hljs">function tool_logging_middleware(ctx::FunctionInvocationContext, next::Function)
+    @info &quot;Calling tool&quot; name=ctx.tool.name arguments=ctx.arguments
+
+    result = next(ctx)  # Execute the tool
+
+    @info &quot;Tool returned&quot; name=ctx.tool.name result=result
+    return result
+end
+
+agent = Agent(
+    client = client,
+    function_middlewares = [tool_logging_middleware],
+)</code></pre><h2 id="The-@middleware-Macro"><a class="docs-heading-anchor" href="#The-@middleware-Macro">The @middleware Macro</a><a id="The-@middleware-Macro-1"></a><a class="docs-heading-anchor-permalink" href="#The-@middleware-Macro" title="Permalink"></a></h2><p>The <a href="../api/middleware.html#AgentFramework.@middleware"><code>@middleware</code></a> macro provides syntactic sugar for defining middleware:</p><pre><code class="language-julia hljs">@middleware my_middleware function(ctx, next)
+    @info &quot;Before&quot;
+    result = next(ctx)
+    @info &quot;After&quot;
+    return result
+end</code></pre><h2 id="Middleware-Pipeline-Ordering"><a class="docs-heading-anchor" href="#Middleware-Pipeline-Ordering">Middleware Pipeline Ordering</a><a id="Middleware-Pipeline-Ordering-1"></a><a class="docs-heading-anchor-permalink" href="#Middleware-Pipeline-Ordering" title="Permalink"></a></h2><p>Middleware executes in the order they appear in the vector. The first middleware is the outermost wrapper:</p><pre><code class="language-julia hljs">agent = Agent(
+    client = client,
+    chat_middlewares = [
+        auth_middleware,      # Runs first (outermost)
+        retry_middleware,     # Runs second
+        logging_middleware,   # Runs third (innermost, closest to the handler)
+    ],
+)</code></pre><p>Execution flow:</p><pre><code class="nohighlight hljs">Request → auth → retry → logging → [LLM call] → logging → retry → auth → Response</code></pre><h2 id="Common-Patterns"><a class="docs-heading-anchor" href="#Common-Patterns">Common Patterns</a><a id="Common-Patterns-1"></a><a class="docs-heading-anchor-permalink" href="#Common-Patterns" title="Permalink"></a></h2><h3 id="Retry-with-Exponential-Backoff"><a class="docs-heading-anchor" href="#Retry-with-Exponential-Backoff">Retry with Exponential Backoff</a><a id="Retry-with-Exponential-Backoff-1"></a><a class="docs-heading-anchor-permalink" href="#Retry-with-Exponential-Backoff" title="Permalink"></a></h3><p>AgentFramework.jl includes a built-in retry middleware via <a href="../api/resilience.html#AgentFramework.retry_chat_middleware"><code>retry_chat_middleware</code></a>:</p><pre><code class="language-julia hljs">config = RetryConfig(
+    max_retries = 3,
+    initial_delay = 1.0,
+    max_delay = 60.0,
+    multiplier = 2.0,
+    jitter = 0.1,
+    retryable_status_codes = [429, 500, 502, 503, 504],
+)
+
+agent = Agent(
+    client = client,
+    chat_middlewares = [retry_chat_middleware(config)],
+)</code></pre><p>Or use the convenience builder:</p><pre><code class="language-julia hljs">agent = Agent(client=client)
+with_retry!(agent)  # Adds retry middleware with defaults</code></pre><h3 id="Rate-Limiting"><a class="docs-heading-anchor" href="#Rate-Limiting">Rate Limiting</a><a id="Rate-Limiting-1"></a><a class="docs-heading-anchor-permalink" href="#Rate-Limiting" title="Permalink"></a></h3><p>Use <a href="../api/resilience.html#AgentFramework.TokenBucketRateLimiter"><code>TokenBucketRateLimiter</code></a> with <a href="../api/resilience.html#AgentFramework.rate_limit_chat_middleware"><code>rate_limit_chat_middleware</code></a>:</p><pre><code class="language-julia hljs">limiter = TokenBucketRateLimiter(max_tokens=10, refill_rate=1.0)
+
+agent = Agent(
+    client = client,
+    chat_middlewares = [rate_limit_chat_middleware(limiter)],
+)</code></pre><p>Or with the convenience builder:</p><pre><code class="language-julia hljs">with_rate_limit!(agent, max_tokens=10, refill_rate=1.0)</code></pre><h3 id="Content-Filtering"><a class="docs-heading-anchor" href="#Content-Filtering">Content Filtering</a><a id="Content-Filtering-1"></a><a class="docs-heading-anchor-permalink" href="#Content-Filtering" title="Permalink"></a></h3><pre><code class="language-julia hljs">function content_filter_middleware(ctx::ChatContext, next::Function)
+    # Check input messages for blocked content
+    for msg in ctx.messages
+        text = get_text(msg)
+        if contains(text, &quot;forbidden&quot;)
+            return ChatResponse(
+                messages = [Message(:assistant, &quot;I cannot process that request.&quot;)],
+                finish_reason = CONTENT_FILTER,
+            )
+        end
+    end
+    return next(ctx)
+end</code></pre><h3 id="Request/Response-Transformation"><a class="docs-heading-anchor" href="#Request/Response-Transformation">Request/Response Transformation</a><a id="Request/Response-Transformation-1"></a><a class="docs-heading-anchor-permalink" href="#Request/Response-Transformation" title="Permalink"></a></h3><pre><code class="language-julia hljs">function add_system_context(ctx::ChatContext, next::Function)
+    # Prepend additional context to messages
+    timestamp = string(Dates.now())
+    system_msg = Message(:system, &quot;Current time: $(timestamp)&quot;)
+    pushfirst!(ctx.messages, system_msg)
+    return next(ctx)
+end</code></pre><h3 id="Tool-Argument-Validation"><a class="docs-heading-anchor" href="#Tool-Argument-Validation">Tool Argument Validation</a><a id="Tool-Argument-Validation-1"></a><a class="docs-heading-anchor-permalink" href="#Tool-Argument-Validation" title="Permalink"></a></h3><pre><code class="language-julia hljs">function validate_args_middleware(ctx::FunctionInvocationContext, next::Function)
+    # Validate arguments before tool execution
+    if ctx.tool.name == &quot;delete_file&quot; &amp;&amp; !haskey(ctx.arguments, &quot;confirm&quot;)
+        ctx.arguments[&quot;confirm&quot;] = false
+        @warn &quot;Auto-injected confirm=false for delete_file&quot;
+    end
+    return next(ctx)
+end</code></pre><h2 id="MiddlewareTermination"><a class="docs-heading-anchor" href="#MiddlewareTermination">MiddlewareTermination</a><a id="MiddlewareTermination-1"></a><a class="docs-heading-anchor-permalink" href="#MiddlewareTermination" title="Permalink"></a></h2><p>Use <a href="../api/middleware.html#AgentFramework.terminate_pipeline"><code>terminate_pipeline</code></a> to short-circuit the middleware chain and return a result immediately, skipping all remaining middleware and the handler:</p><pre><code class="language-julia hljs">function cache_middleware(ctx::ChatContext, next::Function)
+    cache_key = hash(ctx.messages)
+    cached = get(RESPONSE_CACHE, cache_key, nothing)
+    if cached !== nothing
+        # Skip the LLM call entirely
+        terminate_pipeline(cached, message=&quot;Cache hit&quot;)
+    end
+
+    result = next(ctx)
+
+    # Cache the response
+    RESPONSE_CACHE[cache_key] = result
+    return result
+end</code></pre><p><a href="../api/middleware.html#AgentFramework.terminate_pipeline"><code>terminate_pipeline</code></a> throws a <a href="middleware.html#MiddlewareTermination"><code>MiddlewareTermination</code></a> exception that is caught by the pipeline executor. The <code>result</code> field becomes the return value of the pipeline.</p><h2 id="Built-in-Middleware"><a class="docs-heading-anchor" href="#Built-in-Middleware">Built-in Middleware</a><a id="Built-in-Middleware-1"></a><a class="docs-heading-anchor-permalink" href="#Built-in-Middleware" title="Permalink"></a></h2><table><tr><th style="text-align: left">Middleware</th><th style="text-align: left">Layer</th><th style="text-align: left">Description</th></tr><tr><td style="text-align: left"><a href="../api/resilience.html#AgentFramework.retry_chat_middleware"><code>retry_chat_middleware</code></a></td><td style="text-align: left">Chat</td><td style="text-align: left">Retry failed LLM calls with exponential backoff</td></tr><tr><td style="text-align: left"><a href="../api/resilience.html#AgentFramework.rate_limit_chat_middleware"><code>rate_limit_chat_middleware</code></a></td><td style="text-align: left">Chat</td><td style="text-align: left">Token bucket rate limiting</td></tr><tr><td style="text-align: left"><a href="../api/telemetry.html#AgentFramework.telemetry_agent_middleware"><code>telemetry_agent_middleware</code></a></td><td style="text-align: left">Agent</td><td style="text-align: left">OpenTelemetry-aligned span tracking</td></tr><tr><td style="text-align: left"><a href="../api/telemetry.html#AgentFramework.telemetry_chat_middleware"><code>telemetry_chat_middleware</code></a></td><td style="text-align: left">Chat</td><td style="text-align: left">LLM call telemetry</td></tr><tr><td style="text-align: left"><a href="../api/telemetry.html#AgentFramework.telemetry_function_middleware"><code>telemetry_function_middleware</code></a></td><td style="text-align: left">Function</td><td style="text-align: left">Tool invocation telemetry</td></tr></table><h2 id="Applying-Middleware-Programmatically"><a class="docs-heading-anchor" href="#Applying-Middleware-Programmatically">Applying Middleware Programmatically</a><a id="Applying-Middleware-Programmatically-1"></a><a class="docs-heading-anchor-permalink" href="#Applying-Middleware-Programmatically" title="Permalink"></a></h2><p>The framework uses <a href="../api/middleware.html#AgentFramework.apply_agent_middleware"><code>apply_agent_middleware</code></a>, <a href="../api/middleware.html#AgentFramework.apply_chat_middleware"><code>apply_chat_middleware</code></a>, and <a href="../api/middleware.html#AgentFramework.apply_function_middleware"><code>apply_function_middleware</code></a> internally, but you can use them directly:</p><pre><code class="language-julia hljs">ctx = ChatContext(messages=msgs, options=ChatOptions())
+handler = (c) -&gt; get_response(client, c.messages, c.options)
+result = apply_chat_middleware([mw1, mw2], ctx, handler)</code></pre><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="sessions.html#Sessions-and-Memory">Sessions &amp; Memory</a> — Context providers that work alongside middleware</li><li><a href="@ref">Agents</a> — How middleware integrates into the agent execution pipeline</li><li><a href="@ref">Streaming</a> — Middleware behavior during streaming</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="tools.html">« Tools</a><a class="docs-footer-nextpage" href="sessions.html">Sessions &amp; Memory »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 14:18">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
