@@ -73,6 +73,26 @@ using AgentFramework
         @test contains(skill.instructions, "How to use")
     end
 
+    @testset "parse_skill_md_content with full YAML frontmatter" begin
+        content = """
+        ---
+        name: RichSkill
+        description: |
+          A multi-line
+          skill description.
+        tags:
+          - alpha
+          - beta
+        ---
+
+        Rich instructions.
+        """
+        skill = parse_skill_md_content(content)
+        @test skill.name == "RichSkill"
+        @test contains(skill.description, "multi-line")
+        @test skill.tags == ["alpha", "beta"]
+    end
+
     @testset "parse_skill_md_content without frontmatter" begin
         content = "Just some instructions here."
         skill = parse_skill_md_content(content)
@@ -119,6 +139,10 @@ using AgentFramework
 
     @testset "_parse_tags empty string" begin
         @test isempty(AgentFramework._parse_tags(""))
+    end
+
+    @testset "_parse_tags vector" begin
+        @test AgentFramework._parse_tags(["one", "two"]) == ["one", "two"]
     end
 
     # ── Directory Scanner ────────────────────────────────────────────────────
@@ -415,5 +439,125 @@ using AgentFramework
         before_run!(sp, nothing, AgentSession(), ctx, Dict{String, Any}())
         @test isempty(ctx.instructions)
         @test isempty(ctx.tools)
+    end
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  Skill Source Decorators
+    # ═══════════════════════════════════════════════════════════════════════
+
+    @testset "StaticSkillSource" begin
+        skills = [Skill(name="A"), Skill(name="B")]
+        src = StaticSkillSource(skills)
+        @test length(get_skills(src)) == 2
+        @test get_skills(src)[1].name == "A"
+    end
+
+    @testset "DeduplicatingSkillSource" begin
+        skills = [Skill(name="dup"), Skill(name="unique"), Skill(name="dup", description="second")]
+        src = DeduplicatingSkillSource(StaticSkillSource(skills))
+        result = get_skills(src)
+        @test length(result) == 2
+        @test result[1].name == "dup"
+        @test result[1].description == ""  # first wins
+        @test result[2].name == "unique"
+    end
+
+    @testset "FilteringSkillSource" begin
+        skills = [
+            Skill(name="prod", tags=["production"]),
+            Skill(name="dev", tags=["development"]),
+            Skill(name="both", tags=["production", "development"]),
+        ]
+        src = FilteringSkillSource(
+            StaticSkillSource(skills),
+            s -> "production" in s.tags,
+        )
+        result = get_skills(src)
+        @test length(result) == 2
+        @test all(s -> "production" in s.tags, result)
+    end
+
+    @testset "AggregatingSkillSource" begin
+        src1 = StaticSkillSource([Skill(name="A")])
+        src2 = StaticSkillSource([Skill(name="B"), Skill(name="C")])
+        agg = AggregatingSkillSource([src1, src2])
+        result = get_skills(agg)
+        @test length(result) == 3
+        @test result[1].name == "A"
+        @test result[3].name == "C"
+    end
+
+    @testset "Composing decorators" begin
+        skills = [
+            Skill(name="A", tags=["ok"]),
+            Skill(name="B", tags=["skip"]),
+            Skill(name="A", tags=["ok"], description="dup"),
+        ]
+        src = StaticSkillSource(skills)
+        composed = DeduplicatingSkillSource(FilteringSkillSource(src, s -> "ok" in s.tags))
+        result = get_skills(composed)
+        @test length(result) == 1
+        @test result[1].name == "A"
+        @test result[1].description == ""  # first "ok" A wins
+    end
+
+    @testset "SkillSourceBuilder" begin
+        @testset "Basic build" begin
+            b = SkillSourceBuilder()
+            add_skills!(b, [Skill(name="X"), Skill(name="Y")])
+            src = build(b)
+            @test length(get_skills(src)) == 2
+        end
+
+        @testset "Build with dedup" begin
+            b = SkillSourceBuilder()
+            add_skills!(b, [Skill(name="A"), Skill(name="A")])
+            deduplicate!(b)
+            src = build(b)
+            @test length(get_skills(src)) == 1
+        end
+
+        @testset "Build with filter" begin
+            b = SkillSourceBuilder()
+            add_skills!(b, [
+                Skill(name="keep", tags=["yes"]),
+                Skill(name="drop", tags=["no"]),
+            ])
+            filter_by!(b, s -> "yes" in s.tags)
+            src = build(b)
+            @test length(get_skills(src)) == 1
+            @test get_skills(src)[1].name == "keep"
+        end
+
+        @testset "Build with aggregation" begin
+            b = SkillSourceBuilder()
+            add_skills!(b, [Skill(name="A")])
+            add_skills!(b, [Skill(name="B")])
+            src = build(b)
+            @test length(get_skills(src)) == 2
+        end
+
+        @testset "Build with chaining" begin
+            b = SkillSourceBuilder()
+            add_skills!(b, [
+                Skill(name="X", tags=["prod"]),
+                Skill(name="X", tags=["prod"], description="dup"),
+                Skill(name="Y", tags=["dev"]),
+            ])
+            filter_by!(b, s -> "prod" in s.tags)
+            deduplicate!(b)
+            src = build(b)
+            result = get_skills(src)
+            @test length(result) == 1
+            @test result[1].name == "X"
+        end
+    end
+
+    @testset "load_skills!" begin
+        provider = SkillsProvider()
+        src = StaticSkillSource([Skill(name="loaded")])
+        load_skills!(provider, src)
+        @test length(provider.skills) == 1
+        @test provider.skills[1].name == "loaded"
     end
 end

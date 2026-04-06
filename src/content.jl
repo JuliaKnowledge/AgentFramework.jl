@@ -310,6 +310,55 @@ function hosted_vector_store_content(vector_store_id::AbstractString)::Content
     Content(type=HOSTED_VECTOR_STORE, vector_store_id=String(vector_store_id))
 end
 
+"""
+    function_approval_request_content(id, function_call; annotations=nothing) -> Content
+
+Create a function approval request, asking the user to approve a tool call.
+"""
+function function_approval_request_content(id::AbstractString, function_call::Content;
+                                            annotations=nothing)::Content
+    Content(
+        type=FUNCTION_APPROVAL_REQUEST,
+        id=String(id),
+        function_call=function_call,
+        user_input_request=true,
+        annotations=annotations,
+    )
+end
+
+"""
+    function_approval_response_content(approved, id, function_call; annotations=nothing) -> Content
+
+Create a function approval response indicating whether a tool call was approved.
+"""
+function function_approval_response_content(approved::Bool, id::AbstractString, function_call::Content;
+                                             annotations=nothing)::Content
+    Content(
+        type=FUNCTION_APPROVAL_RESPONSE,
+        approved=approved,
+        id=String(id),
+        function_call=function_call,
+        annotations=annotations,
+    )
+end
+
+"""
+    to_approval_response(content, approved) -> Content
+
+Convert a function_approval_request content to a function_approval_response.
+"""
+function to_approval_response(content::Content, approved::Bool)::Content
+    content.type == FUNCTION_APPROVAL_REQUEST || error("Can only convert FUNCTION_APPROVAL_REQUEST to response")
+    function_approval_response_content(approved, content.id, content.function_call;
+                                        annotations=content.annotations)
+end
+
+"""Check if content is a function approval request."""
+is_approval_request(c::Content) = c.type == FUNCTION_APPROVAL_REQUEST
+
+"""Check if content is a function approval response."""
+is_approval_response(c::Content) = c.type == FUNCTION_APPROVAL_RESPONSE
+
 # ── Accessors & Utilities ────────────────────────────────────────────────────
 
 """
@@ -462,4 +511,54 @@ function Base.:(==)(a::Content, b::Content)
         getfield(a, field) != getfield(b, field) && return false
     end
     return true
+end
+
+# ── Media Type Detection ────────────────────────────────────────────────────
+
+# Magic byte prefixes in base64 for common file formats
+const _MAGIC_BASE64_PREFIXES = [
+    # Images
+    ("iVBOR",        "image/png"),        # PNG: 0x89 0x50 0x4E 0x47
+    ("/9j/",         "image/jpeg"),       # JPEG: 0xFF 0xD8 0xFF
+    ("R0lGOD",       "image/gif"),        # GIF: GIF87a / GIF89a
+    ("UklGR",        "image/webp"),       # WebP: RIFF....WEBP
+    ("AAABAA",       "image/x-icon"),     # ICO
+    ("Qk",           "image/bmp"),        # BMP: BM
+    ("SUkq",         "image/tiff"),       # TIFF (little-endian): II
+    ("TU0A",         "image/tiff"),       # TIFF (big-endian): MM
+    # Audio
+    ("T2dnU",        "audio/ogg"),        # OGG: OggS
+    ("RIFF",         "audio/wav"),        # WAV: RIFF
+    ("fLaC",         "audio/flac"),       # FLAC
+    ("//uQx",        "audio/mpeg"),       # MP3
+    ("SUQz",         "audio/mpeg"),       # MP3 (ID3)
+    # Documents
+    ("JVBERi0",      "application/pdf"),  # PDF: %PDF-
+    ("UEsDBBQ",      "application/zip"),  # ZIP / DOCX / XLSX
+    # Video
+    ("AAAA",         "video/mp4"),        # MP4 (ftyp box)
+    ("GkXfow",       "video/webm"),       # WebM
+]
+
+"""
+    detect_media_type_from_base64(data::String) -> Union{String, Nothing}
+
+Detect the media type of base64-encoded binary data by examining magic byte
+prefixes. Returns a MIME type string or `nothing` if unrecognised.
+
+# Examples
+```julia
+detect_media_type_from_base64("iVBORw0KGgoAAAANSU...")  # "image/png"
+detect_media_type_from_base64("JVBERi0xLjQ...")          # "application/pdf"
+detect_media_type_from_base64("dW5rbm93bg==")            # nothing
+```
+"""
+function detect_media_type_from_base64(data::AbstractString)::Union{String, Nothing}
+    isempty(data) && return nothing
+    for (prefix, mime) in _MAGIC_BASE64_PREFIXES
+        if startswith(data, prefix)
+            return mime
+        end
+    end
+    return nothing
 end

@@ -1,0 +1,343 @@
+# Evaluation Framework
+Simon Frost
+
+- [Overview](#overview)
+- [Prerequisites](#prerequisites)
+- [Setup](#setup)
+- [Defining a Weather Agent](#defining-a-weather-agent)
+- [Built-in Checks](#built-in-checks)
+  - [keyword_check](#keyword_check)
+  - [tool_called_check](#tool_called_check)
+  - [tool_call_args_match](#tool_call_args_match)
+  - [tool_calls_present](#tool_calls_present)
+- [Custom Evaluators](#custom-evaluators)
+- [Combining Checks with
+  LocalEvaluator](#combining-checks-with-localevaluator)
+- [Evaluating a Single Agent](#evaluating-a-single-agent)
+  - [Providing Expected Output](#providing-expected-output)
+  - [Providing Expected Tool Calls](#providing-expected-tool-calls)
+- [Building Test Cases with
+  EvalItem](#building-test-cases-with-evalitem)
+- [Evaluating a Workflow](#evaluating-a-workflow)
+- [Inspecting Results](#inspecting-results)
+  - [Per-Item Detail](#per-item-detail)
+  - [Failing CI with
+    raise_for_status](#failing-ci-with-raise_for_status)
+- [Summary](#summary)
+
+## Overview
+
+Building an agent is only half the battle — you also need to verify that
+it behaves correctly. The **evaluation framework** in AgentFramework.jl
+lets you define checks, run them against agent (or workflow) outputs,
+and inspect pass/fail results programmatically.
+
+In this vignette you will learn how to:
+
+1.  Use built-in checks such as `keyword_check` and `tool_called_check`.
+2.  Write custom evaluators with `make_evaluator`.
+3.  Combine checks into a `LocalEvaluator`.
+4.  Evaluate a single agent with `evaluate_agent`.
+5.  Evaluate a multi-agent workflow with `evaluate_workflow`.
+6.  Build pre-defined test cases with `EvalItem`.
+7.  Inspect results and fail CI with `raise_for_status`.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the
+`qwen3:8b` model pulled:
+
+``` bash
+ollama pull qwen3:8b
+```
+
+> [!NOTE]
+>
+> The evaluation framework itself is provider-agnostic — it works with
+> any chat client. We use Ollama here for a fully local, reproducible
+> example.
+
+## Setup
+
+``` julia
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## Defining a Weather Agent
+
+We will evaluate a small weather agent throughout this vignette. First,
+define a tool and the agent:
+
+``` julia
+@tool function get_weather(city::String)
+    """Get the current weather for a city."""
+    if lowercase(city) == "paris"
+        return "Paris: Sunny, 22°C"
+    elseif lowercase(city) == "london"
+        return "London: Rainy, 14°C"
+    else
+        return "$city: Cloudy, 18°C"
+    end
+end
+
+client = OllamaChatClient(model = "qwen3:8b")
+
+weather_agent = Agent(
+    name        = "WeatherBot",
+    instructions = "You are a weather assistant. Use the get_weather tool to answer weather questions. Always include the temperature in your response.",
+    client      = client,
+    tools       = [get_weather],
+)
+```
+
+## Built-in Checks
+
+AgentFramework.jl ships several ready-made checks that cover the most
+common evaluation scenarios.
+
+### keyword_check
+
+Pass if the response text contains **all** specified keywords
+(case-insensitive by default):
+
+``` julia
+check_weather = keyword_check("weather", "temperature")
+check_sunny   = keyword_check("sunny"; case_sensitive = false)
+```
+
+### tool_called_check
+
+Pass if the agent called the named tool during the conversation. Use
+`mode` to require all or any of the listed tools:
+
+``` julia
+check_tool = tool_called_check("get_weather")
+check_any  = tool_called_check("get_weather", "get_forecast"; mode = :any)
+```
+
+### tool_call_args_match
+
+Pass if a tool call was made with the expected arguments:
+
+``` julia
+check_args = tool_call_args_match("get_weather", Dict("city" => "Paris"))
+```
+
+### tool_calls_present
+
+Pass if the conversation contains **any** tool call at all:
+
+``` julia
+check_any_tool = tool_calls_present()
+```
+
+## Custom Evaluators
+
+When the built-in checks are not enough, wrap an arbitrary function with
+`make_evaluator`. Return a `Bool`, or a `Float64` (≥ 0.5 = pass):
+
+``` julia
+length_check = make_evaluator(; name = "response_length") do response
+    length(response) > 50
+end
+
+# Evaluator that compares against expected output (second argument)
+similarity_check = make_evaluator(; name = "semantic_match") do response, expected
+    contains(lowercase(response), lowercase(expected))
+end
+```
+
+## Combining Checks with LocalEvaluator
+
+`LocalEvaluator` bundles multiple checks into a single evaluator that
+runs entirely in-process — no external API calls required:
+
+``` julia
+evaluator = LocalEvaluator(
+    keyword_check("weather"),
+    length_check,
+    tool_called_check("get_weather"),
+    tool_calls_present(),
+)
+```
+
+## Evaluating a Single Agent
+
+`evaluate_agent` is the primary entry point. It runs the agent against
+one or more queries, then feeds the responses through every evaluator:
+
+``` julia
+results = evaluate_agent(
+    agent      = weather_agent,
+    queries    = ["What's the weather in Paris?",
+                  "Will it rain in London?"],
+    evaluators = evaluator,
+    eval_name  = "weather_basic",
+)
+```
+
+`results` is a `Vector{EvalResults}` — one entry per evaluator.
+
+### Providing Expected Output
+
+Supply `expected_output` to enable checks that compare against a known
+answer:
+
+``` julia
+results = evaluate_agent(
+    agent           = weather_agent,
+    queries         = ["What's the weather in Paris?"],
+    expected_output = "Sunny",
+    evaluators      = similarity_check,
+)
+```
+
+### Providing Expected Tool Calls
+
+Supply `expected_tool_calls` to verify the agent invoked the right tools
+with the right arguments:
+
+``` julia
+results = evaluate_agent(
+    agent               = weather_agent,
+    queries             = ["What's the weather in Paris?"],
+    expected_tool_calls = [ExpectedToolCall("get_weather", Dict("city" => "Paris"))],
+    evaluators          = evaluator,
+)
+```
+
+## Building Test Cases with EvalItem
+
+For richer test scenarios, construct `EvalItem` objects directly. Each
+item carries a full conversation, optional expected output, and expected
+tool calls:
+
+``` julia
+item = EvalItem(
+    conversation = [
+        Message(ROLE_USER, [text_content("What's the weather?")]),
+        Message(ROLE_ASSISTANT, [text_content("It's sunny and 22°C in Paris.")])
+    ],
+    expected_output = "sunny",
+)
+```
+
+You can also attach expected tool calls and a conversation split
+strategy:
+
+``` julia
+item_with_tools = EvalItem(
+    conversation = [
+        Message(ROLE_USER, [text_content("Weather in London?")]),
+        Message(ROLE_ASSISTANT, [
+            text_content("Let me check."),
+            tool_call_content("call_1", "get_weather", Dict("city" => "London")),
+        ]),
+        Message(ROLE_TOOL, [tool_result_content("call_1", "London: Rainy, 14°C")]),
+        Message(ROLE_ASSISTANT, [text_content("It's rainy and 14°C in London.")]),
+    ],
+    expected_tool_calls = [ExpectedToolCall("get_weather", Dict("city" => "London"))],
+    split_strategy      = SPLIT_LAST_TURN,
+)
+```
+
+Two built-in split strategies control which part of the conversation is
+the “response”: `SPLIT_LAST_TURN` (last assistant message) and
+`SPLIT_FULL` (everything after the first user message).
+
+## Evaluating a Workflow
+
+For multi-agent workflows, `evaluate_workflow` supports the same
+evaluators and breaks down results per agent:
+
+``` julia
+using AgentFramework: WorkflowBuilder, add_agent!, add_edge!, build
+
+planner = Agent(
+    name         = "Planner",
+    instructions = "Create a travel plan. Delegate weather lookups to WeatherBot.",
+    client       = client,
+)
+
+wb = WorkflowBuilder()
+add_agent!(wb, planner)
+add_agent!(wb, weather_agent)
+add_edge!(wb, planner, weather_agent)
+my_workflow = build(wb)
+
+results = evaluate_workflow(
+    workflow          = my_workflow,
+    queries           = ["Plan a trip to Tokyo"],
+    evaluators        = evaluator,
+    include_per_agent = true,
+)
+```
+
+The returned `EvalResults` may include `sub_results` keyed by agent
+name.
+
+## Inspecting Results
+
+Every `EvalResults` exposes helper accessors for summary statistics and
+per-item detail:
+
+``` julia
+for r in results
+    println("Provider : $(r.provider)")
+    println("Passed   : $(eval_passed(r)) / $(eval_total(r))")
+    println("All OK?  : $(all_passed(r))")
+end
+```
+
+### Per-Item Detail
+
+Drill into individual items and their scores:
+
+``` julia
+for r in results
+    for item_result in r.items
+        println("Item $(item_result.item_id): $(item_result.status)")
+        for score in item_result.scores
+            mark = score.passed ? "PASS" : "FAIL"
+            println("  $(score.name): $mark (score=$(score.score))")
+        end
+    end
+end
+```
+
+### Failing CI with raise_for_status
+
+Call `raise_for_status` to throw an `EvalNotPassedError` when any check
+fails — ideal for `@testset` blocks and CI pipelines:
+
+``` julia
+raise_for_status(results[1]; msg = "Quality gate failed for weather agent")
+```
+
+## Summary
+
+| Function / Type | Purpose |
+|----|----|
+| `keyword_check(kw...)` | Check response contains all keywords |
+| `tool_called_check(names...)` | Check specific tools were called |
+| `tool_call_args_match(name, args)` | Check tool was called with expected args |
+| `tool_calls_present()` | Check any tool call was made |
+| `make_evaluator(fn; name)` | Wrap a custom function as an evaluator |
+| `LocalEvaluator(checks...)` | Bundle checks into a local evaluator |
+| `evaluate_agent(; agent, queries, evaluators)` | Run and evaluate a single agent |
+| `evaluate_workflow(; workflow, queries, evaluators)` | Run and evaluate a workflow |
+| `EvalItem(conversation, ...)` | Pre-built test case with expected output |
+| `ExpectedToolCall(name, args)` | Expected tool invocation |
+| `EvalResults` | Container for evaluation outcomes |
+| `eval_passed(r)` / `eval_total(r)` | Result counts |
+| `all_passed(r)` | `true` when every check passes |
+| `raise_for_status(r; msg)` | Throw on failure — ideal for CI |
+| `SPLIT_LAST_TURN` / `SPLIT_FULL` | Conversation split strategies |
+
+The evaluation framework keeps your agents honest — run it in tests, in
+CI, or as a pre-deploy quality gate.
+
+Next, see [18 — MCP](../18_mcp/18_mcp.qmd) to learn how to integrate
+external tools via the Model Context Protocol.

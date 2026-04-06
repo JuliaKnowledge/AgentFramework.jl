@@ -1,0 +1,898 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Simon Frost">
+
+<title>Mem0 Persistent Memory</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="21_mem0_files/libs/clipboard/clipboard.min.js"></script>
+<script src="21_mem0_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="21_mem0_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="21_mem0_files/libs/quarto-html/popper.min.js"></script>
+<script src="21_mem0_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="21_mem0_files/libs/quarto-html/anchor.min.js"></script>
+<link href="21_mem0_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="21_mem0_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="21_mem0_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="21_mem0_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="21_mem0_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#what-is-mem0" id="toc-what-is-mem0" class="nav-link" data-scroll-target="#what-is-mem0">What Is Mem0?</a></li>
+  <li><a href="#mem0-platform-vs-oss" id="toc-mem0-platform-vs-oss" class="nav-link" data-scroll-target="#mem0-platform-vs-oss">Mem0 Platform vs OSS</a></li>
+  <li><a href="#mem0contextprovider-automatic-memory-injection" id="toc-mem0contextprovider-automatic-memory-injection" class="nav-link" data-scroll-target="#mem0contextprovider-automatic-memory-injection">Mem0ContextProvider — Automatic Memory Injection</a></li>
+  <li><a href="#full-conversation-with-memory" id="toc-full-conversation-with-memory" class="nav-link" data-scroll-target="#full-conversation-with-memory">Full Conversation with Memory</a></li>
+  <li><a href="#controlling-what-gets-stored" id="toc-controlling-what-gets-stored" class="nav-link" data-scroll-target="#controlling-what-gets-stored">Controlling What Gets Stored</a></li>
+  <li><a href="#agent-and-application-scoping" id="toc-agent-and-application-scoping" class="nav-link" data-scroll-target="#agent-and-application-scoping">Agent and Application Scoping</a></li>
+  <li><a href="#using-with-a-pre-configured-client" id="toc-using-with-a-pre-configured-client" class="nav-link" data-scroll-target="#using-with-a-pre-configured-client">Using with a Pre-configured Client</a></li>
+  <li><a href="#using-with-mem0.jl-local-julia-library" id="toc-using-with-mem0.jl-local-julia-library" class="nav-link" data-scroll-target="#using-with-mem0.jl-local-julia-library">Using with Mem0.jl (Local Julia Library)</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="21_mem0.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="21_mem0.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Mem0 Persistent Memory</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Simon Frost </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Agents built with AgentFramework.jl are stateless by default — each call to <code>run_agent</code> starts fresh. In-process providers such as <code>InMemoryHistoryProvider</code> (see <a href="../07_memory/07_memory.qmd">07 — Memory</a>) persist within a single Julia session but lose everything on restart. For truly long-lived memory that spans sessions, processes, and even machines, you need an external semantic memory store.</p>
+<p><a href="https://mem0.ai">Mem0</a> is a semantic memory layer that <strong>learns</strong> from conversations and <strong>injects</strong> relevant context into future interactions. Instead of replaying raw chat history, Mem0 extracts facts, preferences, and knowledge, then retrieves only the memories that are relevant to the current query.</p>
+<p>By the end of this vignette you will know how to:</p>
+<ol type="1">
+<li>Connect to Mem0 via the <strong>platform</strong> (cloud) or <strong>OSS</strong> (self-hosted) deployment.</li>
+<li>Use <code>Mem0ContextProvider</code> for automatic memory search and storage.</li>
+<li>Scope memories by user, agent, or application.</li>
+<li>Control what gets stored and how memories are retrieved.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>You also need access to Mem0 — either a <a href="https://app.mem0.ai">Mem0 Platform</a> API key or a local Mem0 OSS instance running on <code>http://localhost:8000</code>.</p>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="what-is-mem0" class="level2">
+<h2 class="anchored" data-anchor-id="what-is-mem0">What Is Mem0?</h2>
+<p>Traditional conversation history replays every message verbatim. This works for short exchanges but becomes noisy and token-expensive as conversations grow.</p>
+<p>Mem0 takes a different approach:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 32%">
+<col style="width: 46%">
+<col style="width: 21%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Feature</th>
+<th>Raw History</th>
+<th>Mem0</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Storage</td>
+<td>Exact messages</td>
+<td>Extracted facts and preferences</td>
+</tr>
+<tr class="even">
+<td>Retrieval</td>
+<td>All messages in order</td>
+<td>Semantic search — only relevant memories</td>
+</tr>
+<tr class="odd">
+<td>Persistence</td>
+<td>In-process or file</td>
+<td>External service (cloud or self-hosted)</td>
+</tr>
+<tr class="even">
+<td>Cross-session</td>
+<td>Same session only</td>
+<td>Shared across all sessions for a user</td>
+</tr>
+</tbody>
+</table>
+<p>When an agent uses Mem0, the flow looks like this:</p>
+<pre><code>User sends message
+    │
+    ▼
+before_run!() — Search Mem0 for relevant memories → inject into context
+    │
+    ▼
+Agent generates response (with memory context)
+    │
+    ▼
+after_run!() — Store conversation messages to Mem0</code></pre>
+<p>Mem0 automatically extracts structured facts from the raw conversation (e.g. “The user’s name is Alice” or “The user prefers Julia over Python”) and stores them for future retrieval.</p>
+</section>
+<section id="mem0-platform-vs-oss" class="level2">
+<h2 class="anchored" data-anchor-id="mem0-platform-vs-oss">Mem0 Platform vs OSS</h2>
+<p>AgentFramework.jl supports two deployment modes via the <code>Mem0Client</code>:</p>
+<div id="4" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Cloud platform — requires an API key from https://app.mem0.ai</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>platform_client <span class="op">=</span> <span class="fu">Mem0Client</span>(</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    deployment <span class="op">=</span> MEM0_PLATFORM,</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Local OSS deployment — no API key required by default</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>oss_client <span class="op">=</span> <span class="fu">Mem0Client</span>(</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>    base_url <span class="op">=</span> <span class="st">"http://localhost:8000"</span>,</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>    deployment <span class="op">=</span> MEM0_OSS,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Setting</th>
+<th>Platform</th>
+<th>OSS</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>deployment</code></td>
+<td><code>MEM0_PLATFORM</code> (default)</td>
+<td><code>MEM0_OSS</code></td>
+</tr>
+<tr class="even">
+<td><code>base_url</code></td>
+<td><code>https://api.mem0.ai</code></td>
+<td><code>http://localhost:8000</code></td>
+</tr>
+<tr class="odd">
+<td>Authentication</td>
+<td><code>api_key</code> required</td>
+<td>Optional</td>
+</tr>
+<tr class="even">
+<td>Environment variable</td>
+<td><code>MEM0_API_KEY</code></td>
+<td><code>MEM0_API_KEY</code> (optional)</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="mem0contextprovider-automatic-memory-injection" class="level2">
+<h2 class="anchored" data-anchor-id="mem0contextprovider-automatic-memory-injection">Mem0ContextProvider — Automatic Memory Injection</h2>
+<p>The simplest way to add Mem0 to an agent is through <code>Mem0ContextProvider</code>. It automatically searches for relevant memories before each agent run and stores new memories afterward:</p>
+<div id="6" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    top_k <span class="op">=</span> <span class="fl">5</span>,</span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"MemoryAgent"</span>,</span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You remember what users tell you across conversations."</span>,</span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>),</span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [provider],</span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Under the hood, the provider implements two hooks:</p>
+<ul>
+<li><strong><code>before_run!</code></strong> — takes the user’s input, searches Mem0 for related memories, and injects them as context messages.</li>
+<li><strong><code>after_run!</code></strong> — collects the conversation messages (filtered by role) and sends them to Mem0 for extraction and storage.</li>
+</ul>
+</section>
+<section id="full-conversation-with-memory" class="level2">
+<h2 class="anchored" data-anchor-id="full-conversation-with-memory">Full Conversation with Memory</h2>
+<p>Here is a complete example showing how memories persist across sessions:</p>
+<div id="8" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    top_k <span class="op">=</span> <span class="fl">5</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"MemoryAgent"</span>,</span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You remember what users tell you across conversations. Keep answers brief."</span>,</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [provider],</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a><span class="co"># First conversation — agent learns about the user</span></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>session1 <span class="op">=</span> <span class="fu">create_session</span>(agent)</span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"My name is Alice and I love Julia programming."</span>; session <span class="op">=</span> session1)</span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Turn 1: "</span>, response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Turn 1: Nice to meet you, Alice! Julia is a great choice for scientific computing.</code></pre>
+<p>Now start a brand new session. The in-process state is gone, but Mem0 remembers:</p>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="co"># New session — no shared in-process state with session1</span></span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>session2 <span class="op">=</span> <span class="fu">create_session</span>(agent)</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"What do you know about me?"</span>; session <span class="op">=</span> session2)</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Turn 2: "</span>, response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Turn 2: You're Alice, and you love Julia programming!</code></pre>
+<p>The provider searched Mem0 for memories matching “What do you know about me?”, found the stored fact about Alice and Julia, and injected it into the context before the LLM generated its response.</p>
+</section>
+<section id="controlling-what-gets-stored" class="level2">
+<h2 class="anchored" data-anchor-id="controlling-what-gets-stored">Controlling What Gets Stored</h2>
+<p>By default, <code>Mem0ContextProvider</code> stores messages from all three roles: user, assistant, and system. You can customize this:</p>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    store_roles <span class="op">=</span> [ROLE_USER, ROLE_ASSISTANT],  <span class="co"># Exclude system messages</span></span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    top_k <span class="op">=</span> <span class="fl">10</span>,                                  <span class="co"># Retrieve more memories</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>    context_prompt <span class="op">=</span> <span class="st">"## User Memories</span><span class="sc">\n</span><span class="st">Relevant context from previous conversations:"</span>,</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 27%">
+<col style="width: 39%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Parameter</th>
+<th>Default</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>store_roles</code></td>
+<td><code>[ROLE_USER, ROLE_ASSISTANT, ROLE_SYSTEM]</code></td>
+<td>Which message roles to send to Mem0</td>
+</tr>
+<tr class="even">
+<td><code>top_k</code></td>
+<td><code>5</code></td>
+<td>Number of memories to retrieve per search</td>
+</tr>
+<tr class="odd">
+<td><code>rerank</code></td>
+<td><code>nothing</code></td>
+<td>Enable Mem0 reranking for better relevance</td>
+</tr>
+<tr class="even">
+<td><code>context_prompt</code></td>
+<td><code>"## Memories\nConsider the following..."</code></td>
+<td>Text prepended to retrieved memories</td>
+</tr>
+<tr class="odd">
+<td><code>source_id</code></td>
+<td><code>"mem0"</code></td>
+<td>Identifier for this provider instance</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="agent-and-application-scoping" class="level2">
+<h2 class="anchored" data-anchor-id="agent-and-application-scoping">Agent and Application Scoping</h2>
+<p>Memories can be scoped to different dimensions. At least one of <code>user_id</code>, <code>agent_id</code>, or <code>application_id</code> must be provided:</p>
+<div id="14" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Scope memories to a specific agent</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>agent_scoped <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    agent_id <span class="op">=</span> <span class="st">"weather-bot"</span>,</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="co"># Scope memories to an application</span></span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>app_scoped <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    application_id <span class="op">=</span> <span class="st">"my-app"</span>,</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>This is useful when multiple agents serve the same user but should maintain separate memory spaces:</p>
+<div id="16" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Personal assistant memories are isolated from work assistant memories</span></span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>personal_provider <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    agent_id <span class="op">=</span> <span class="st">"personal-assistant"</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a>work_provider <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>    agent_id <span class="op">=</span> <span class="st">"work-assistant"</span>,</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>    user_id <span class="op">=</span> <span class="st">"user-123"</span>,</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>personal_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"PersonalAssistant"</span>,</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You help with personal tasks and remember preferences."</span>,</span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [personal_provider],</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a>work_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"WorkAssistant"</span>,</span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You help with professional tasks and remember work context."</span>,</span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [work_provider],</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="using-with-a-pre-configured-client" class="level2">
+<h2 class="anchored" data-anchor-id="using-with-a-pre-configured-client">Using with a Pre-configured Client</h2>
+<p>If you need to share a single <code>Mem0Client</code> across multiple providers, or want more control over the connection settings, create the client separately:</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Create a shared client</span></span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>mem0 <span class="op">=</span> <span class="fu">Mem0Client</span>(</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    api_key <span class="op">=</span> <span class="st">"your-mem0-api-key"</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    deployment <span class="op">=</span> MEM0_PLATFORM,</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Reuse across providers with different scopes</span></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>provider_a <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(client <span class="op">=</span> mem0, user_id <span class="op">=</span> <span class="st">"alice"</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>provider_b <span class="op">=</span> <span class="fu">Mem0ContextProvider</span>(client <span class="op">=</span> mem0, user_id <span class="op">=</span> <span class="st">"bob"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="using-with-mem0.jl-local-julia-library" class="level2">
+<h2 class="anchored" data-anchor-id="using-with-mem0.jl-local-julia-library">Using with Mem0.jl (Local Julia Library)</h2>
+<p>For fully local memory with no external API, the companion <code>Mem0.jl</code> package provides an in-process memory system with embeddings, vector stores, and graph storage. You can integrate it by writing a custom context provider that calls <code>Mem0.jl</code> directly in its <code>before_run!</code>/<code>after_run!</code> hooks — see <a href="../07_memory/07_memory.qmd">07 — Memory</a> for the custom provider pattern.</p>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 25%">
+<col style="width: 48%">
+<col style="width: 25%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concept</th>
+<th>Type / Constant</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Mem0 client</td>
+<td><code>Mem0Client</code></td>
+<td>HTTP client for Mem0 API</td>
+</tr>
+<tr class="even">
+<td>Context provider</td>
+<td><code>Mem0ContextProvider</code></td>
+<td>Automatic memory search and storage</td>
+</tr>
+<tr class="odd">
+<td>Platform deployment</td>
+<td><code>MEM0_PLATFORM</code></td>
+<td>Cloud Mem0 at <code>api.mem0.ai</code></td>
+</tr>
+<tr class="even">
+<td>OSS deployment</td>
+<td><code>MEM0_OSS</code></td>
+<td>Self-hosted Mem0</td>
+</tr>
+<tr class="odd">
+<td>Memory scoping</td>
+<td><code>user_id</code>, <code>agent_id</code>, <code>application_id</code></td>
+<td>Isolate memories by dimension</td>
+</tr>
+</tbody>
+</table>
+<p>Key takeaways:</p>
+<ol type="1">
+<li><strong>Mem0 provides semantic memory</strong> — it extracts facts from conversations and retrieves only what is relevant, unlike raw history replay.</li>
+<li><strong><code>Mem0ContextProvider</code> handles everything automatically</strong> — search before the run, store after the run.</li>
+<li><strong>Scope memories</strong> by user, agent, or application to keep different contexts isolated.</li>
+<li><strong>Works with both cloud and self-hosted</strong> Mem0 deployments via the <code>deployment</code> parameter.</li>
+</ol>
+<p>Next, see <a href="../22_human_in_the_loop/22_human_in_the_loop.qmd">22 — Human in the Loop</a> to learn how to add human approval steps to agent workflows.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

@@ -95,7 +95,7 @@ Detailed instructions...
 ```
 """
 function parse_skill_md_content(content::String; source_path::Union{Nothing, String} = nothing)::Skill
-    frontmatter_match = match(r"^\s*---\s*\n(.*?)\n---\s*\n"s, content)
+    frontmatter_match = match(r"^\s*---\s*\r?\n(.*?)\r?\n---\s*(?:\r?\n|$)"s, content)
 
     if frontmatter_match === nothing
         return Skill(
@@ -108,35 +108,28 @@ function parse_skill_md_content(content::String; source_path::Union{Nothing, Str
     frontmatter_str = frontmatter_match.captures[1]
     body = content[frontmatter_match.offset + length(frontmatter_match.match):end]
 
-    metadata = _parse_simple_yaml(frontmatter_str)
+    metadata = _load_yaml_definition(frontmatter_str)
 
     Skill(
-        name = get(metadata, "name", source_path !== nothing ? basename(dirname(source_path)) : "unnamed"),
-        description = get(metadata, "description", ""),
-        version = get(metadata, "version", "1.0.0"),
+        name = string(get(metadata, "name", source_path !== nothing ? basename(dirname(source_path)) : "unnamed")),
+        description = string(get(metadata, "description", "")),
+        version = string(get(metadata, "version", "1.0.0")),
         instructions = strip(body),
         tags = _parse_tags(get(metadata, "tags", "")),
         source_path = source_path,
     )
 end
 
-"""Simple YAML-like key: value parser (not full YAML)."""
-function _parse_simple_yaml(text::AbstractString)::Dict{String, String}
-    result = Dict{String, String}()
-    for line in split(text, "\n")
-        line = strip(line)
-        isempty(line) && continue
-        m = match(r"^(\w+)\s*:\s*(.*)$", line)
-        if m !== nothing
-            result[m.captures[1]] = strip(m.captures[2])
-        end
+"""Parse tags from YAML scalar or sequence values."""
+function _parse_tags(tags_value)::Vector{String}
+    tags_value === nothing && return String[]
+    if tags_value isa AbstractVector
+        return [string(tag) for tag in tags_value if !isempty(strip(string(tag)))]
+    elseif !(tags_value isa AbstractString)
+        return [string(tags_value)]
     end
-    return result
-end
 
-"""Parse tags from YAML-like format: `[tag1, tag2]` or `tag1, tag2`."""
-function _parse_tags(tags_str::AbstractString)::Vector{String}
-    s = strip(tags_str, ['[', ']', ' '])
+    s = strip(tags_value, ['[', ']', ' '])
     isempty(s) && return String[]
     return [strip(t) for t in split(s, ",") if !isempty(strip(t))]
 end
@@ -398,4 +391,168 @@ function _format_skill_instructions(skill::Skill)::String
         end
     end
     return join(parts, "\n")
+end
+
+# ── Skill Source Decorators ──────────────────────────────────────────────────
+
+"""
+    AbstractSkillSource
+
+Base type for composable skill sources. Implement `get_skills(source)::Vector{Skill}`.
+"""
+abstract type AbstractSkillSource end
+
+"""Get skills from a source."""
+function get_skills end
+
+"""Simple skill source wrapping a vector of skills."""
+struct StaticSkillSource <: AbstractSkillSource
+    skills::Vector{Skill}
+end
+get_skills(s::StaticSkillSource)::Vector{Skill} = s.skills
+
+"""Skill source from a directory of SKILL.md files."""
+Base.@kwdef struct DirectorySkillSource <: AbstractSkillSource
+    directory::String
+    recursive::Bool = true
+    follow_symlinks::Bool = false
+end
+get_skills(s::DirectorySkillSource)::Vector{Skill} =
+    discover_skills(s.directory; recursive=s.recursive, follow_symlinks=s.follow_symlinks)
+
+"""
+    DeduplicatingSkillSource
+
+Wraps a skill source and removes duplicate skills by name.
+First occurrence wins.
+"""
+struct DeduplicatingSkillSource <: AbstractSkillSource
+    inner::AbstractSkillSource
+end
+
+function get_skills(s::DeduplicatingSkillSource)::Vector{Skill}
+    seen = Set{String}()
+    result = Skill[]
+    for skill in get_skills(s.inner)
+        if skill.name ∉ seen
+            push!(seen, skill.name)
+            push!(result, skill)
+        end
+    end
+    return result
+end
+
+"""
+    FilteringSkillSource
+
+Wraps a skill source and filters skills by a predicate function.
+
+# Example
+```julia
+source = FilteringSkillSource(
+    inner = DirectorySkillSource(directory="skills/"),
+    filter = skill -> "production" in skill.tags
+)
+```
+"""
+struct FilteringSkillSource <: AbstractSkillSource
+    inner::AbstractSkillSource
+    filter::Function  # (Skill) -> Bool
+end
+
+get_skills(s::FilteringSkillSource)::Vector{Skill} =
+    filter(s.filter, get_skills(s.inner))
+
+"""
+    AggregatingSkillSource
+
+Combines multiple skill sources into a single source.
+Skills from all sources are concatenated in order.
+"""
+struct AggregatingSkillSource <: AbstractSkillSource
+    sources::Vector{AbstractSkillSource}
+end
+
+function get_skills(s::AggregatingSkillSource)::Vector{Skill}
+    result = Skill[]
+    for source in s.sources
+        append!(result, get_skills(source))
+    end
+    return result
+end
+
+# ── Skill Source Builder ─────────────────────────────────────────────────────
+
+"""
+    SkillSourceBuilder
+
+Fluent API for composing skill sources with decorators.
+
+# Example
+```julia
+source = SkillSourceBuilder() |>
+    b -> add_directory!(b, "skills/") |>
+    b -> add_directory!(b, "extra_skills/") |>
+    b -> filter_by!(b, skill -> "approved" in skill.tags) |>
+    b -> deduplicate!(b) |>
+    build
+```
+"""
+mutable struct SkillSourceBuilder
+    sources::Vector{AbstractSkillSource}
+    decorators::Vector{Any}  # Callables that wrap AbstractSkillSource → AbstractSkillSource
+end
+
+SkillSourceBuilder() = SkillSourceBuilder(AbstractSkillSource[], Any[])
+
+"""Add a directory of SKILL.md files to the builder."""
+function add_directory!(b::SkillSourceBuilder, dir::String; recursive=true)
+    push!(b.sources, DirectorySkillSource(directory=dir, recursive=recursive))
+    return b
+end
+
+"""Add a static set of skills to the builder."""
+function add_skills!(b::SkillSourceBuilder, skills::Vector{Skill})
+    push!(b.sources, StaticSkillSource(skills))
+    return b
+end
+
+"""Add a custom skill source to the builder."""
+function add_source!(b::SkillSourceBuilder, source::AbstractSkillSource)
+    push!(b.sources, source)
+    return b
+end
+
+"""Apply deduplication (by name) to the builder's output."""
+function deduplicate!(b::SkillSourceBuilder)
+    push!(b.decorators, DeduplicatingSkillSource)
+    return b
+end
+
+"""Apply a filter predicate to the builder's output."""
+function filter_by!(b::SkillSourceBuilder, pred::Function)
+    push!(b.decorators, inner -> FilteringSkillSource(inner, pred))
+    return b
+end
+
+"""Build the composed skill source from the builder."""
+function build(b::SkillSourceBuilder)::AbstractSkillSource
+    base = if length(b.sources) == 1
+        b.sources[1]
+    else
+        AggregatingSkillSource(copy(b.sources))
+    end
+
+    result = base
+    for dec in b.decorators
+        result = dec(result)
+    end
+    return result
+end
+
+"""Load skills from a composed skill source into a SkillsProvider."""
+function load_skills!(provider::SkillsProvider, source::AbstractSkillSource)
+    skills = get_skills(source)
+    append!(provider.skills, skills)
+    return provider
 end

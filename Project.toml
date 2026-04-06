@@ -1,32 +1,42 @@
 name = "AgentFramework"
-uuid = "a1b2c3d4-e5f6-7890-abcd-ef1234567890"
+uuid = "8d84e483-4b84-4e3c-9ca2-3749d621083b"
 keywords = ["agents", "ai", "llm", "azure", "julia"]
 version = "0.1.0"
 authors = ["Simon Frost <sdwfrost@users.noreply.github.com>"]
 description = "Julia framework for building, orchestrating, and deploying AI agents"
 
 [deps]
-AzureIdentity = "b2c3d4e5-f6a7-8901-bcde-f23456789012"
 Base64 = "2a0f44e3-6c83-55bd-87e4-b1978d98bd5f"
+DBInterface = "a10d1c49-ce27-4219-8d33-6db1a4562965"
 Dates = "ade2ca70-3891-5945-98fb-dc099432e06a"
 HTTP = "cd3eb016-35fb-5094-929b-558a96fad6f3"
 JSON3 = "0f8b85d8-7281-11e9-16c2-39a750bddbf1"
 Logging = "56ddb016-857b-54e1-b83d-db4d58db5568"
 SHA = "ea8e919c-243c-51af-8825-aaa63cd721ce"
+SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
 UUIDs = "cf7118a7-6976-5b1a-9a39-7adc72f591a4"
+YAML = "ddb6d928-2868-570f-bddf-ab3f9cf99eb6"
 
 [extensions]
 AgentFrameworkAzureIdentityExt = "AzureIdentity"
+AgentFrameworkGenieExt = "Genie"
+
+[weakdeps]
+AzureIdentity = "1b7b9afa-6387-4f08-b495-223719ee650f"
+Genie = "c43c736e-a2d1-11e8-161f-af95117fbd1e"
 
 [compat]
 AzureIdentity = "0.1.0"
+DBInterface = "2"
+Genie = "5"
 HTTP = "1"
 JSON3 = "1"
+SQLite = "1"
+YAML = "0.4.16"
 julia = "1.9"
 
 [extras]
-AzureIdentity = "b2c3d4e5-f6a7-8901-bcde-f23456789012"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["AzureIdentity", "Test"]
+test = ["Test"]

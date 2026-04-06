@@ -85,4 +85,67 @@ using Test
         # Different session
         @test isempty(get_messages(provider, "s2"))
     end
+
+    # ═══════════════════════════════════════════════════════════════════════
+    #  Per-Service-Call History Persistence
+    # ═══════════════════════════════════════════════════════════════════════
+
+    @testset "LOCAL_HISTORY_CONVERSATION_ID" begin
+        @test is_local_history_conversation_id(LOCAL_HISTORY_CONVERSATION_ID) == true
+        @test is_local_history_conversation_id("other") == false
+        @test is_local_history_conversation_id(nothing) == false
+    end
+
+    @testset "PerServiceCallHistoryMiddleware construction" begin
+        provider = InMemoryHistoryProvider()
+        session = AgentSession()
+        mw = PerServiceCallHistoryMiddleware(providers=[provider], session=session)
+        @test length(mw.providers) == 1
+        @test mw.session === session
+    end
+
+    @testset "PerServiceCallHistoryMiddleware persists per call" begin
+        provider = InMemoryHistoryProvider()
+        session = AgentSession(id="test-session")
+        mw = PerServiceCallHistoryMiddleware(providers=[provider], session=session)
+
+        # Simulate a chat context (duck-typed)
+        ctx = (
+            messages = Message[Message(:user, "hello")],
+            options = nothing,
+            result = nothing,
+        )
+
+        # Make it mutable via Ref-like pattern
+        mutable_ctx = Base.@kwdef mutable struct _TestCtx
+            messages::Vector{Message} = Message[]
+            options::Any = nothing
+            result::Any = nothing
+        end
+        test_ctx = _TestCtx(
+            messages=[Message(:user, "hello")],
+            options=nothing,
+            result=nothing,
+        )
+
+        # Simulate the LLM returning a response
+        function fake_next()
+            test_ctx.result = (messages=[Message(:assistant, "world")],)
+        end
+
+        mw(test_ctx, fake_next)
+
+        # History should have been persisted
+        saved = get_messages(provider, "test-session")
+        @test length(saved) == 1
+        @test saved[1].role == :assistant
+    end
+
+    @testset "with_per_service_call_history helper" begin
+        provider = InMemoryHistoryProvider()
+        session = AgentSession()
+        mw = with_per_service_call_history(session, [provider])
+        @test mw isa PerServiceCallHistoryMiddleware
+        @test length(mw.providers) == 1
+    end
 end

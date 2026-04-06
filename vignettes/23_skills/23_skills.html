@@ -1,0 +1,1062 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Simon Frost">
+
+<title>Skills System</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="23_skills_files/libs/clipboard/clipboard.min.js"></script>
+<script src="23_skills_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="23_skills_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="23_skills_files/libs/quarto-html/popper.min.js"></script>
+<script src="23_skills_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="23_skills_files/libs/quarto-html/anchor.min.js"></script>
+<link href="23_skills_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="23_skills_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="23_skills_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="23_skills_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="23_skills_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#what-are-skills" id="toc-what-are-skills" class="nav-link" data-scroll-target="#what-are-skills">What Are Skills?</a></li>
+  <li><a href="#the-skill.md-format" id="toc-the-skill.md-format" class="nav-link" data-scroll-target="#the-skill.md-format">The SKILL.md Format</a></li>
+  <li><a href="#parsing-skill.md-files" id="toc-parsing-skill.md-files" class="nav-link" data-scroll-target="#parsing-skill.md-files">Parsing SKILL.md Files</a></li>
+  <li><a href="#discovering-skills-from-a-directory" id="toc-discovering-skills-from-a-directory" class="nav-link" data-scroll-target="#discovering-skills-from-a-directory">Discovering Skills from a Directory</a>
+  <ul class="collapse">
+  <li><a href="#discovery-options" id="toc-discovery-options" class="nav-link" data-scroll-target="#discovery-options">Discovery Options</a></li>
+  </ul></li>
+  <li><a href="#skillsprovider-injecting-skills-into-an-agent" id="toc-skillsprovider-injecting-skills-into-an-agent" class="nav-link" data-scroll-target="#skillsprovider-injecting-skills-into-an-agent">SkillsProvider — Injecting Skills into an Agent</a>
+  <ul class="collapse">
+  <li><a href="#from-a-directory" id="toc-from-a-directory" class="nav-link" data-scroll-target="#from-a-directory">From a Directory</a></li>
+  <li><a href="#from-code-defined-skills" id="toc-from-code-defined-skills" class="nav-link" data-scroll-target="#from-code-defined-skills">From Code-Defined Skills</a></li>
+  </ul></li>
+  <li><a href="#skill-resources" id="toc-skill-resources" class="nav-link" data-scroll-target="#skill-resources">Skill Resources</a>
+  <ul class="collapse">
+  <li><a href="#static-resources" id="toc-static-resources" class="nav-link" data-scroll-target="#static-resources">Static Resources</a></li>
+  <li><a href="#dynamic-resources" id="toc-dynamic-resources" class="nav-link" data-scroll-target="#dynamic-resources">Dynamic Resources</a></li>
+  <li><a href="#retrieving-resource-content" id="toc-retrieving-resource-content" class="nav-link" data-scroll-target="#retrieving-resource-content">Retrieving Resource Content</a></li>
+  </ul></li>
+  <li><a href="#composing-skill-sources" id="toc-composing-skill-sources" class="nav-link" data-scroll-target="#composing-skill-sources">Composing Skill Sources</a>
+  <ul class="collapse">
+  <li><a href="#source-types" id="toc-source-types" class="nav-link" data-scroll-target="#source-types">Source Types</a></li>
+  </ul></li>
+  <li><a href="#progressive-disclosure-in-action" id="toc-progressive-disclosure-in-action" class="nav-link" data-scroll-target="#progressive-disclosure-in-action">Progressive Disclosure in Action</a></li>
+  <li><a href="#full-example-multi-skill-agent" id="toc-full-example-multi-skill-agent" class="nav-link" data-scroll-target="#full-example-multi-skill-agent">Full Example: Multi-Skill Agent</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="23_skills.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="23_skills.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Skills System</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Simon Frost </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Skills are <strong>reusable, discoverable instruction sets</strong> that can be dynamically loaded into agents — think of them as plugins for agent behaviour. Instead of stuffing every possible instruction into the system prompt, skills follow a <strong>progressive disclosure</strong> pattern:</p>
+<ol type="1">
+<li><strong>Advertise</strong> — skill names and descriptions are injected into the prompt.</li>
+<li><strong>Load</strong> — full instructions are fetched on demand via a <code>load_skill</code> tool.</li>
+<li><strong>Read resources</strong> — supplementary data is read via <code>read_skill_resource</code>.</li>
+</ol>
+<p>In this vignette you will learn how to:</p>
+<ol type="1">
+<li>Understand the <code>SKILL.md</code> file format and its YAML frontmatter.</li>
+<li>Parse a <code>SKILL.md</code> file into a <code>Skill</code> struct.</li>
+<li>Discover skills from a directory tree with <code>discover_skills</code>.</li>
+<li>Use <code>SkillsProvider</code> to inject skills into an agent’s context.</li>
+<li>Define skills entirely in code with <code>SkillResource</code>.</li>
+<li>Compose skill sources with <code>SkillSourceBuilder</code>.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb1"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="what-are-skills" class="level2">
+<h2 class="anchored" data-anchor-id="what-are-skills">What Are Skills?</h2>
+<p>An agent’s system prompt has finite capacity. Skills let you keep instructions modular — each skill lives in its own <code>SKILL.md</code> file (or is defined in code) and is only loaded when the LLM decides it needs it. This keeps the base prompt small and focused while giving the agent access to a rich library of domain-specific knowledge.</p>
+<p>A skill consists of:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Component</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Name</strong></td>
+<td>Unique identifier for the skill</td>
+</tr>
+<tr class="even">
+<td><strong>Description</strong></td>
+<td>Short summary shown to the LLM in the prompt</td>
+</tr>
+<tr class="odd">
+<td><strong>Version</strong></td>
+<td>Semantic version string</td>
+</tr>
+<tr class="even">
+<td><strong>Tags</strong></td>
+<td>Categorisation labels for filtering/discovery</td>
+</tr>
+<tr class="odd">
+<td><strong>Instructions</strong></td>
+<td>Full markdown body — loaded on demand</td>
+</tr>
+<tr class="even">
+<td><strong>Resources</strong></td>
+<td>Named supplementary content (files, schemas, tables)</td>
+</tr>
+</tbody>
+</table>
+</section>
+<section id="the-skill.md-format" class="level2">
+<h2 class="anchored" data-anchor-id="the-skill.md-format">The SKILL.md Format</h2>
+<p>Each skill lives in its own directory with a <code>SKILL.md</code> file. The file uses YAML frontmatter for metadata, followed by the instructions body:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb3"><pre class="sourceCode markdown code-with-copy"><code class="sourceCode markdown"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="an">name:</span><span class="co"> DataAnalysis</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="an">description:</span><span class="co"> Skill for analyzing tabular data</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="an">version:</span><span class="co"> 1.0.0</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a><span class="an">tags:</span><span class="co"> [data, analysis, csv]</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co">---</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a><span class="fu"># Data Analysis Instructions</span></span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>When asked to analyze data:</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="ss">1. </span>First understand the structure (columns, types, row count)</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a><span class="ss">2. </span>Look for patterns, outliers, and trends</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a><span class="ss">3. </span>Summarize findings with statistics</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a><span class="ss">4. </span>Suggest visualizations where appropriate</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<p>The frontmatter fields (<code>name</code>, <code>description</code>, <code>version</code>, <code>tags</code>) are all optional — sensible defaults are inferred from the directory name and file content.</p>
+</section>
+<section id="parsing-skill.md-files" class="level2">
+<h2 class="anchored" data-anchor-id="parsing-skill.md-files">Parsing SKILL.md Files</h2>
+<p>Use <code>parse_skill_md</code> to load a single skill file into a <code>Skill</code> struct:</p>
+<div id="4" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>skill <span class="op">=</span> <span class="fu">parse_skill_md</span>(<span class="st">"skills/data_analysis/SKILL.md"</span>)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(skill.name)         <span class="co"># "DataAnalysis"</span></span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(skill.description)  <span class="co"># "Skill for analyzing tabular data"</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(skill.version)      <span class="co"># "1.0.0"</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(skill.tags)         <span class="co"># ["data", "analysis", "csv"]</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(skill.instructions) <span class="co"># The markdown content after frontmatter</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>You can also parse a raw string with <code>parse_skill_md_content</code>:</p>
+<div id="6" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>content <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="st">---</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a><span class="st">name: Greeter</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a><span class="st">description: A simple greeting skill</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a><span class="st">version: 0.1.0</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a><span class="st">tags: [demo]</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a><span class="st">---</span></span>
+<span id="cb5-8"><a href="#cb5-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-9"><a href="#cb5-9" aria-hidden="true" tabindex="-1"></a><span class="st">When asked to greet someone, respond warmly and use their name.</span></span>
+<span id="cb5-10"><a href="#cb5-10" aria-hidden="true" tabindex="-1"></a><span class="st">"""</span></span>
+<span id="cb5-11"><a href="#cb5-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb5-12"><a href="#cb5-12" aria-hidden="true" tabindex="-1"></a>skill <span class="op">=</span> <span class="fu">parse_skill_md_content</span>(content)</span>
+<span id="cb5-13"><a href="#cb5-13" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(skill.name)  <span class="co"># "Greeter"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="discovering-skills-from-a-directory" class="level2">
+<h2 class="anchored" data-anchor-id="discovering-skills-from-a-directory">Discovering Skills from a Directory</h2>
+<p>A typical project organises skills in a directory tree:</p>
+<pre><code>skills/
+├── data_analysis/
+│   ├── SKILL.md
+│   └── schema.json
+├── code_review/
+│   ├── SKILL.md
+│   └── style_guide.md
+└── summarisation/
+    └── SKILL.md</code></pre>
+<p>Use <code>discover_skills</code> to scan the tree and collect all skills:</p>
+<div id="8" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>skills <span class="op">=</span> <span class="fu">discover_skills</span>(<span class="st">"./skills"</span>; recursive<span class="op">=</span><span class="cn">true</span>, max_depth<span class="op">=</span><span class="fl">2</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> s <span class="kw">in</span> skills</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"</span><span class="sc">$</span>(s.name)<span class="st"> v</span><span class="sc">$</span>(s.version)<span class="st">: </span><span class="sc">$</span>(s.description)<span class="st">"</span>)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>DataAnalysis v1.0.0: Skill for analyzing tabular data
+CodeReview v1.0.0: Skill for reviewing code quality
+Summarisation v1.0.0: Skill for summarizing long documents</code></pre>
+<p>The scanner automatically picks up file-based resources (<code>.md</code>, <code>.txt</code>, <code>.json</code>, <code>.yaml</code>, <code>.yml</code>, <code>.jl</code>, <code>.py</code> files) in each skill directory and attaches them to the skill.</p>
+<section id="discovery-options" class="level3">
+<h3 class="anchored" data-anchor-id="discovery-options">Discovery Options</h3>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>Keyword</th>
+<th>Default</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>recursive</code></td>
+<td><code>true</code></td>
+<td>Recurse into subdirectories</td>
+</tr>
+<tr class="even">
+<td><code>max_depth</code></td>
+<td><code>2</code></td>
+<td>Maximum recursion depth</td>
+</tr>
+<tr class="odd">
+<td><code>follow_symlinks</code></td>
+<td><code>false</code></td>
+<td>Follow symbolic links (security risk)</td>
+</tr>
+</tbody>
+</table>
+</section>
+</section>
+<section id="skillsprovider-injecting-skills-into-an-agent" class="level2">
+<h2 class="anchored" data-anchor-id="skillsprovider-injecting-skills-into-an-agent">SkillsProvider — Injecting Skills into an Agent</h2>
+<p>The <code>SkillsProvider</code> is a context provider that wires skills into an agent. On each call to <code>run_agent</code>, it:</p>
+<ol type="1">
+<li>Injects a skill advertisement into the system prompt.</li>
+<li>Adds <code>load_skill</code> and <code>read_skill_resource</code> tools to the agent’s tool belt.</li>
+</ol>
+<section id="from-a-directory" class="level3">
+<h3 class="anchored" data-anchor-id="from-a-directory">From a Directory</h3>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">SkillsProvider</span>()</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">add_skills_from_directory!</span>(provider, <span class="st">"./skills"</span>)</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"SkillfulAgent"</span>,</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You have access to various skills. Use them when appropriate."</span>,</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>),</span>
+<span id="cb9-8"><a href="#cb9-8" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [provider],</span>
+<span id="cb9-9"><a href="#cb9-9" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-10"><a href="#cb9-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-11"><a href="#cb9-11" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"Analyze this CSV data: name,age</span><span class="sc">\\</span><span class="st">nAlice,30</span><span class="sc">\\</span><span class="st">nBob,25"</span>)</span>
+<span id="cb9-12"><a href="#cb9-12" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>When the agent runs, the LLM sees a compact skill listing in the system prompt. If it decides a skill is relevant, it calls <code>load_skill("DataAnalysis")</code> to get the full instructions, then follows them.</p>
+</section>
+<section id="from-code-defined-skills" class="level3">
+<h3 class="anchored" data-anchor-id="from-code-defined-skills">From Code-Defined Skills</h3>
+<p>You can also pass skills directly without any files on disk:</p>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>skill <span class="op">=</span> <span class="fu">Skill</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"UnitConverter"</span>,</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Convert between common units of measurement"</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    version <span class="op">=</span> <span class="st">"1.0.0"</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a><span class="st">        When asked to convert units:</span></span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="st">        1. Identify the source and target units</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="st">        2. Apply the conversion factor</span></span>
+<span id="cb10-9"><a href="#cb10-9" aria-hidden="true" tabindex="-1"></a><span class="st">        3. Show the formula and result</span></span>
+<span id="cb10-10"><a href="#cb10-10" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>,</span>
+<span id="cb10-11"><a href="#cb10-11" aria-hidden="true" tabindex="-1"></a>    tags <span class="op">=</span> [<span class="st">"math"</span>, <span class="st">"conversion"</span>],</span>
+<span id="cb10-12"><a href="#cb10-12" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-13"><a href="#cb10-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-14"><a href="#cb10-14" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">SkillsProvider</span>(skills <span class="op">=</span> [skill])</span>
+<span id="cb10-15"><a href="#cb10-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-16"><a href="#cb10-16" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb10-17"><a href="#cb10-17" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"ConverterAgent"</span>,</span>
+<span id="cb10-18"><a href="#cb10-18" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful assistant."</span>,</span>
+<span id="cb10-19"><a href="#cb10-19" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>),</span>
+<span id="cb10-20"><a href="#cb10-20" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [provider],</span>
+<span id="cb10-21"><a href="#cb10-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-22"><a href="#cb10-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb10-23"><a href="#cb10-23" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"How many kilometers is 26.2 miles?"</span>)</span>
+<span id="cb10-24"><a href="#cb10-24" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>A marathon distance of 26.2 miles is approximately 42.16 kilometers
+(26.2 × 1.60934 = 42.16).</code></pre>
+</section>
+</section>
+<section id="skill-resources" class="level2">
+<h2 class="anchored" data-anchor-id="skill-resources">Skill Resources</h2>
+<p>Resources are named supplementary content attached to a skill. They let you separate reference data from instructions — the LLM reads resources on demand via the <code>read_skill_resource</code> tool.</p>
+<section id="static-resources" class="level3">
+<h3 class="anchored" data-anchor-id="static-resources">Static Resources</h3>
+<p>Provide inline content at construction time:</p>
+<div id="14" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>tables_resource <span class="op">=</span> <span class="fu">SkillResource</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"conversion-tables"</span>,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Conversion factors for common units"</span>,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    content <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a><span class="st">        # Conversion Tables</span></span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="st">        | From        | To          | Factor   |</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="st">        |-------------|-------------|----------|</span></span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a><span class="st">        | miles       | kilometers  | 1.60934  |</span></span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a><span class="st">        | kilometers  | miles       | 0.621371 |</span></span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a><span class="st">        | pounds      | kilograms   | 0.453592 |</span></span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a><span class="st">        | kilograms   | pounds      | 2.20462  |</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>,</span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a>    mime_type <span class="op">=</span> <span class="st">"text/markdown"</span>,</span>
+<span id="cb12-15"><a href="#cb12-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-16"><a href="#cb12-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb12-17"><a href="#cb12-17" aria-hidden="true" tabindex="-1"></a>skill <span class="op">=</span> <span class="fu">Skill</span>(</span>
+<span id="cb12-18"><a href="#cb12-18" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"UnitConverter"</span>,</span>
+<span id="cb12-19"><a href="#cb12-19" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Convert between common units using a conversion factor"</span>,</span>
+<span id="cb12-20"><a href="#cb12-20" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb12-21"><a href="#cb12-21" aria-hidden="true" tabindex="-1"></a><span class="st">        1. Review the conversion-tables resource to find the correct factor.</span></span>
+<span id="cb12-22"><a href="#cb12-22" aria-hidden="true" tabindex="-1"></a><span class="st">        2. Compute: result = value × factor.</span></span>
+<span id="cb12-23"><a href="#cb12-23" aria-hidden="true" tabindex="-1"></a><span class="st">        3. Present both the original and converted values with units.</span></span>
+<span id="cb12-24"><a href="#cb12-24" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>,</span>
+<span id="cb12-25"><a href="#cb12-25" aria-hidden="true" tabindex="-1"></a>    resources <span class="op">=</span> <span class="fu">Dict</span>(<span class="st">"conversion-tables"</span> <span class="op">=&gt;</span> tables_resource),</span>
+<span id="cb12-26"><a href="#cb12-26" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="dynamic-resources" class="level3">
+<h3 class="anchored" data-anchor-id="dynamic-resources">Dynamic Resources</h3>
+<p>Use the <code>fn</code> field to compute content lazily at runtime:</p>
+<div id="16" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>schema_resource <span class="op">=</span> <span class="fu">SkillResource</span>(</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"schema"</span>,</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"JSON schema for data format"</span>,</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    fn <span class="op">=</span> () <span class="op">-&gt;</span> <span class="fu">read</span>(<span class="st">"schema.json"</span>, <span class="dt">String</span>),</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    mime_type <span class="op">=</span> <span class="st">"application/json"</span>,</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>policy_resource <span class="op">=</span> <span class="fu">SkillResource</span>(</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"policy"</span>,</span>
+<span id="cb13-10"><a href="#cb13-10" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Current formatting policy"</span>,</span>
+<span id="cb13-11"><a href="#cb13-11" aria-hidden="true" tabindex="-1"></a>    fn <span class="op">=</span> () <span class="op">-&gt;</span> <span class="st">"""</span></span>
+<span id="cb13-12"><a href="#cb13-12" aria-hidden="true" tabindex="-1"></a><span class="st">        # Formatting Policy</span></span>
+<span id="cb13-13"><a href="#cb13-13" aria-hidden="true" tabindex="-1"></a><span class="st">        - Decimal places: 4</span></span>
+<span id="cb13-14"><a href="#cb13-14" aria-hidden="true" tabindex="-1"></a><span class="st">        - Always show both original and converted values</span></span>
+<span id="cb13-15"><a href="#cb13-15" aria-hidden="true" tabindex="-1"></a><span class="st">        - Generated at: </span><span class="sc">$</span>(<span class="fu">now</span>())</span>
+<span id="cb13-16"><a href="#cb13-16" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>,</span>
+<span id="cb13-17"><a href="#cb13-17" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-18"><a href="#cb13-18" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-19"><a href="#cb13-19" aria-hidden="true" tabindex="-1"></a>skill <span class="op">=</span> <span class="fu">Skill</span>(</span>
+<span id="cb13-20"><a href="#cb13-20" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"DataImporter"</span>,</span>
+<span id="cb13-21"><a href="#cb13-21" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Import data from various formats"</span>,</span>
+<span id="cb13-22"><a href="#cb13-22" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"Use the schema resource to validate input data."</span>,</span>
+<span id="cb13-23"><a href="#cb13-23" aria-hidden="true" tabindex="-1"></a>    resources <span class="op">=</span> <span class="fu">Dict</span>(</span>
+<span id="cb13-24"><a href="#cb13-24" aria-hidden="true" tabindex="-1"></a>        <span class="st">"schema"</span> <span class="op">=&gt;</span> schema_resource,</span>
+<span id="cb13-25"><a href="#cb13-25" aria-hidden="true" tabindex="-1"></a>        <span class="st">"policy"</span> <span class="op">=&gt;</span> policy_resource,</span>
+<span id="cb13-26"><a href="#cb13-26" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb13-27"><a href="#cb13-27" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Dynamic resources are evaluated only when the LLM calls <code>read_skill_resource</code>, so they can return live data like timestamps, database lookups, or configuration values.</p>
+</section>
+<section id="retrieving-resource-content" class="level3">
+<h3 class="anchored" data-anchor-id="retrieving-resource-content">Retrieving Resource Content</h3>
+<p>Use <code>get_resource_content</code> to read a resource’s value programmatically:</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>content <span class="op">=</span> <span class="fu">get_resource_content</span>(tables_resource)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(content)  <span class="co"># prints the conversion table markdown</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="composing-skill-sources" class="level2">
+<h2 class="anchored" data-anchor-id="composing-skill-sources">Composing Skill Sources</h2>
+<p>For complex projects you may want to combine skills from multiple directories, filter by tags, and deduplicate. The <code>SkillSourceBuilder</code> provides a fluent API for this:</p>
+<div id="20" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>source <span class="op">=</span> <span class="fu">SkillSourceBuilder</span>() <span class="op">|&gt;</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_directory!</span>(b, <span class="st">"core_skills/"</span>) <span class="op">|&gt;</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_directory!</span>(b, <span class="st">"extra_skills/"</span>) <span class="op">|&gt;</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">deduplicate!</span>(b) <span class="op">|&gt;</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">filter_by!</span>(b, s <span class="op">-&gt;</span> <span class="st">"approved"</span> <span class="kw">in</span> s.tags) <span class="op">|&gt;</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>    build</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">SkillsProvider</span>()</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a><span class="fu">load_skills!</span>(provider, source)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<section id="source-types" class="level3">
+<h3 class="anchored" data-anchor-id="source-types">Source Types</h3>
+<p>AgentFramework.jl provides several composable source types:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 47%">
+<col style="width: 52%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Source</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>StaticSkillSource(skills)</code></td>
+<td>Fixed vector of skills</td>
+</tr>
+<tr class="even">
+<td><code>DirectorySkillSource(directory=...)</code></td>
+<td>Discover from filesystem</td>
+</tr>
+<tr class="odd">
+<td><code>DeduplicatingSkillSource(inner)</code></td>
+<td>Remove duplicates by name (first wins)</td>
+</tr>
+<tr class="even">
+<td><code>FilteringSkillSource(inner, pred)</code></td>
+<td>Filter by a predicate function</td>
+</tr>
+<tr class="odd">
+<td><code>AggregatingSkillSource(sources)</code></td>
+<td>Combine multiple sources</td>
+</tr>
+</tbody>
+</table>
+<p>These can be nested arbitrarily. For example, deduplicate across two directories and then filter:</p>
+<div id="22" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Manual composition (equivalent to the builder above)</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>source <span class="op">=</span> <span class="fu">FilteringSkillSource</span>(</span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">DeduplicatingSkillSource</span>(</span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a>        <span class="fu">AggregatingSkillSource</span>([</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>            <span class="fu">DirectorySkillSource</span>(directory <span class="op">=</span> <span class="st">"core_skills/"</span>),</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">DirectorySkillSource</span>(directory <span class="op">=</span> <span class="st">"extra_skills/"</span>),</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        ])</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>    s <span class="op">-&gt;</span> <span class="st">"approved"</span> <span class="kw">in</span> s.tags,</span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>skills <span class="op">=</span> <span class="fu">get_skills</span>(source)</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> s <span class="kw">in</span> skills</span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"</span><span class="sc">$</span>(s.name)<span class="st">: </span><span class="sc">$</span>(s.description)<span class="st">"</span>)</span>
+<span id="cb16-15"><a href="#cb16-15" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="progressive-disclosure-in-action" class="level2">
+<h2 class="anchored" data-anchor-id="progressive-disclosure-in-action">Progressive Disclosure in Action</h2>
+<p>When a <code>SkillsProvider</code> is attached to an agent, the following happens automatically on each <code>run_agent</code> call:</p>
+<p><strong>Step 1 — Advertise.</strong> The system prompt includes a compact listing:</p>
+<pre><code>You have access to the following skills. Use the load_skill tool to get
+detailed instructions before using a skill.
+
+Available skills:
+- **UnitConverter** (v1.0.0): Convert between common units [math, conversion]
+  - Resource: conversion-tables
+- **DataAnalysis** (v1.0.0): Analyze tabular data [data, analysis, csv]
+  - Resource: schema.json</code></pre>
+<p><strong>Step 2 — Load.</strong> When the LLM calls <code>load_skill("UnitConverter")</code>, it receives the full instructions and a list of available resources.</p>
+<p><strong>Step 3 — Read.</strong> The LLM calls <code>read_skill_resource("UnitConverter", "conversion-tables")</code> to get the factor table, then computes the answer.</p>
+<p>This three-step pattern keeps the base prompt small while giving agents access to arbitrarily rich domain knowledge.</p>
+</section>
+<section id="full-example-multi-skill-agent" class="level2">
+<h2 class="anchored" data-anchor-id="full-example-multi-skill-agent">Full Example: Multi-Skill Agent</h2>
+<p>Putting it all together — a code-defined skill with resources and a directory of file-based skills:</p>
+<div id="24" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Code-defined skill with static and dynamic resources</span></span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>converter_skill <span class="op">=</span> <span class="fu">Skill</span>(</span>
+<span id="cb18-3"><a href="#cb18-3" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"UnitConverter"</span>,</span>
+<span id="cb18-4"><a href="#cb18-4" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Convert between common units using a conversion factor"</span>,</span>
+<span id="cb18-5"><a href="#cb18-5" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb18-6"><a href="#cb18-6" aria-hidden="true" tabindex="-1"></a><span class="st">        1. Read the conversion-tables resource for the correct factor.</span></span>
+<span id="cb18-7"><a href="#cb18-7" aria-hidden="true" tabindex="-1"></a><span class="st">        2. Compute: result = value × factor.</span></span>
+<span id="cb18-8"><a href="#cb18-8" aria-hidden="true" tabindex="-1"></a><span class="st">        3. Present both original and converted values.</span></span>
+<span id="cb18-9"><a href="#cb18-9" aria-hidden="true" tabindex="-1"></a><span class="st">    """</span>,</span>
+<span id="cb18-10"><a href="#cb18-10" aria-hidden="true" tabindex="-1"></a>    resources <span class="op">=</span> <span class="fu">Dict</span>(</span>
+<span id="cb18-11"><a href="#cb18-11" aria-hidden="true" tabindex="-1"></a>        <span class="st">"conversion-tables"</span> <span class="op">=&gt;</span> <span class="fu">SkillResource</span>(</span>
+<span id="cb18-12"><a href="#cb18-12" aria-hidden="true" tabindex="-1"></a>            name <span class="op">=</span> <span class="st">"conversion-tables"</span>,</span>
+<span id="cb18-13"><a href="#cb18-13" aria-hidden="true" tabindex="-1"></a>            description <span class="op">=</span> <span class="st">"Conversion factors table"</span>,</span>
+<span id="cb18-14"><a href="#cb18-14" aria-hidden="true" tabindex="-1"></a>            content <span class="op">=</span> <span class="st">"""</span></span>
+<span id="cb18-15"><a href="#cb18-15" aria-hidden="true" tabindex="-1"></a><span class="st">                | From   | To         | Factor  |</span></span>
+<span id="cb18-16"><a href="#cb18-16" aria-hidden="true" tabindex="-1"></a><span class="st">                |--------|------------|---------|</span></span>
+<span id="cb18-17"><a href="#cb18-17" aria-hidden="true" tabindex="-1"></a><span class="st">                | miles  | kilometers | 1.60934 |</span></span>
+<span id="cb18-18"><a href="#cb18-18" aria-hidden="true" tabindex="-1"></a><span class="st">                | pounds | kilograms  | 0.453592|</span></span>
+<span id="cb18-19"><a href="#cb18-19" aria-hidden="true" tabindex="-1"></a><span class="st">            """</span>,</span>
+<span id="cb18-20"><a href="#cb18-20" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb18-21"><a href="#cb18-21" aria-hidden="true" tabindex="-1"></a>        <span class="st">"policy"</span> <span class="op">=&gt;</span> <span class="fu">SkillResource</span>(</span>
+<span id="cb18-22"><a href="#cb18-22" aria-hidden="true" tabindex="-1"></a>            name <span class="op">=</span> <span class="st">"policy"</span>,</span>
+<span id="cb18-23"><a href="#cb18-23" aria-hidden="true" tabindex="-1"></a>            description <span class="op">=</span> <span class="st">"Formatting rules"</span>,</span>
+<span id="cb18-24"><a href="#cb18-24" aria-hidden="true" tabindex="-1"></a>            fn <span class="op">=</span> () <span class="op">-&gt;</span> <span class="st">"Round to 2 decimal places. Show both units."</span>,</span>
+<span id="cb18-25"><a href="#cb18-25" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb18-26"><a href="#cb18-26" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb18-27"><a href="#cb18-27" aria-hidden="true" tabindex="-1"></a>    tags <span class="op">=</span> [<span class="st">"math"</span>, <span class="st">"approved"</span>],</span>
+<span id="cb18-28"><a href="#cb18-28" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-29"><a href="#cb18-29" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-30"><a href="#cb18-30" aria-hidden="true" tabindex="-1"></a><span class="co"># Combine code skill with file-based skills</span></span>
+<span id="cb18-31"><a href="#cb18-31" aria-hidden="true" tabindex="-1"></a>source <span class="op">=</span> <span class="fu">SkillSourceBuilder</span>() <span class="op">|&gt;</span></span>
+<span id="cb18-32"><a href="#cb18-32" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_skills!</span>(b, [converter_skill]) <span class="op">|&gt;</span></span>
+<span id="cb18-33"><a href="#cb18-33" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_directory!</span>(b, <span class="st">"skills/"</span>) <span class="op">|&gt;</span></span>
+<span id="cb18-34"><a href="#cb18-34" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">deduplicate!</span>(b) <span class="op">|&gt;</span></span>
+<span id="cb18-35"><a href="#cb18-35" aria-hidden="true" tabindex="-1"></a>    build</span>
+<span id="cb18-36"><a href="#cb18-36" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-37"><a href="#cb18-37" aria-hidden="true" tabindex="-1"></a>provider <span class="op">=</span> <span class="fu">SkillsProvider</span>()</span>
+<span id="cb18-38"><a href="#cb18-38" aria-hidden="true" tabindex="-1"></a><span class="fu">load_skills!</span>(provider, source)</span>
+<span id="cb18-39"><a href="#cb18-39" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-40"><a href="#cb18-40" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb18-41"><a href="#cb18-41" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"MultiSkillAgent"</span>,</span>
+<span id="cb18-42"><a href="#cb18-42" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You are a helpful assistant with access to various skills."</span>,</span>
+<span id="cb18-43"><a href="#cb18-43" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>),</span>
+<span id="cb18-44"><a href="#cb18-44" aria-hidden="true" tabindex="-1"></a>    context_providers <span class="op">=</span> [provider],</span>
+<span id="cb18-45"><a href="#cb18-45" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb18-46"><a href="#cb18-46" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb18-47"><a href="#cb18-47" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"How many kilometers is a marathon (26.2 miles)?"</span>)</span>
+<span id="cb18-48"><a href="#cb18-48" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(response.text)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>A marathon is 26.2 miles, which is approximately 42.16 kilometers
+(26.2 × 1.60934 ≈ 42.16).</code></pre>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 26%">
+<col style="width: 47%">
+<col style="width: 26%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concept</th>
+<th>Type / Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Skill</strong></td>
+<td><code>Skill</code></td>
+<td>Discoverable instruction set with metadata and resources</td>
+</tr>
+<tr class="even">
+<td><strong>SkillResource</strong></td>
+<td><code>SkillResource</code></td>
+<td>Named supplementary content (static or dynamic)</td>
+</tr>
+<tr class="odd">
+<td><strong>Parse</strong></td>
+<td><code>parse_skill_md(path)</code></td>
+<td>Load a <code>SKILL.md</code> file into a <code>Skill</code></td>
+</tr>
+<tr class="even">
+<td><strong>Discover</strong></td>
+<td><code>discover_skills(dir)</code></td>
+<td>Scan a directory tree for skills</td>
+</tr>
+<tr class="odd">
+<td><strong>Provide</strong></td>
+<td><code>SkillsProvider</code></td>
+<td>Context provider that injects skills into agents</td>
+</tr>
+<tr class="even">
+<td><strong>Compose</strong></td>
+<td><code>SkillSourceBuilder</code></td>
+<td>Fluent API for combining, filtering, deduplicating sources</td>
+</tr>
+<tr class="odd">
+<td><strong>Sources</strong></td>
+<td><code>StaticSkillSource</code>, <code>DirectorySkillSource</code>, …</td>
+<td>Composable skill source decorators</td>
+</tr>
+</tbody>
+</table>
+<p>Skills follow <strong>progressive disclosure</strong> — advertise cheaply, load on demand, read resources when needed. This keeps agents focused while giving them access to a rich library of domain-specific knowledge.</p>
+<p>Next, see <a href="../24_compaction/24_compaction.qmd">24 — Compaction</a> to learn how to manage conversation length with message compaction strategies.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

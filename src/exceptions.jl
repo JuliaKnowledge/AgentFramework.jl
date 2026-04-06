@@ -113,6 +113,22 @@ struct MiddlewareError <: Exception
     message::String
 end
 
+# ── Declarative Exceptions ─────────────────────────────────────────────────────
+
+struct DeclarativeError <: Exception
+    message::String
+    inner::Union{Nothing, Exception}
+end
+DeclarativeError(msg::String) = DeclarativeError(msg, nothing)
+
+function Base.showerror(io::IO, e::DeclarativeError)
+    print(io, nameof(typeof(e)), ": ", e.message)
+    if e.inner !== nothing
+        print(io, "\n  caused by: ")
+        showerror(io, e.inner)
+    end
+end
+
 # ── Workflow Exceptions ──────────────────────────────────────────────────────
 
 struct WorkflowError <: Exception

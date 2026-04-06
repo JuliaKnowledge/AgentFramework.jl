@@ -2,6 +2,9 @@
 # Mirrors Python Agent with middleware, tools, context providers, and tool execution loop.
 
 const DEFAULT_MAX_TOOL_ITERATIONS = 10
+const _SESSION_ID_OPTION_KEY = "_agentframework_session_id"
+const _THREAD_ID_OPTION_KEY = "_agentframework_thread_id"
+const _INPUT_MESSAGES_OPTION_KEY = "_agentframework_input_messages"
 
 """
     Agent <: AbstractAgent
@@ -46,7 +49,7 @@ Base.@kwdef mutable struct Agent <: AbstractAgent
     description::String = ""
     instructions::String = ""
     client::AbstractChatClient
-    tools::Vector{FunctionTool} = FunctionTool[]
+    tools::Vector = []                   # FunctionTool, HandoffTool, or mixed
     context_providers::Vector{Any} = Any[]
     agent_middlewares::Vector = []
     chat_middlewares::Vector = []
@@ -121,21 +124,58 @@ function _prepare_chat_options(
     end
 
     all_tools = vcat(agent.tools, ctx.tools)
-    if !isempty(all_tools)
-        chat_options = ChatOptions(
-            model = chat_options.model,
-            temperature = chat_options.temperature,
-            top_p = chat_options.top_p,
-            max_tokens = chat_options.max_tokens,
-            stop = chat_options.stop,
-            tools = all_tools,
-            tool_choice = chat_options.tool_choice,
-            response_format = chat_options.response_format,
-            additional = chat_options.additional,
-        )
+    # Normalize: convert HandoffTools to FunctionTools for the LLM
+    function_tools = FunctionTool[]
+    for t in all_tools
+        if t isa FunctionTool
+            push!(function_tools, t)
+        elseif t isa HandoffTool
+            push!(function_tools, handoff_as_function_tool(t))
+        end
     end
+    effective_tools = isempty(function_tools) ? chat_options.tools : function_tools
+    additional = copy(chat_options.additional)
+    additional[_SESSION_ID_OPTION_KEY] = ctx.session_id
+    additional[_THREAD_ID_OPTION_KEY] = ctx.service_session_id
+    additional[_INPUT_MESSAGES_OPTION_KEY] = copy(ctx.input_messages)
 
-    return chat_options, all_tools
+    chat_options = ChatOptions(
+        model = chat_options.model,
+        temperature = chat_options.temperature,
+        top_p = chat_options.top_p,
+        max_tokens = chat_options.max_tokens,
+        stop = chat_options.stop,
+        tools = effective_tools,
+        tool_choice = chat_options.tool_choice,
+        response_format = chat_options.response_format,
+        additional = additional,
+    )
+
+    return chat_options, function_tools
+end
+
+function _sync_service_session!(session::AgentSession, ctx::SessionContext, conversation_id)
+    conversation_id === nothing && return nothing
+    value = String(conversation_id)
+    session.thread_id = value
+    ctx.service_session_id = value
+    return nothing
+end
+
+function _refresh_chat_options_thread_id(chat_options::ChatOptions, ctx::SessionContext)::ChatOptions
+    additional = copy(chat_options.additional)
+    additional[_THREAD_ID_OPTION_KEY] = ctx.service_session_id
+    return ChatOptions(
+        model = chat_options.model,
+        temperature = chat_options.temperature,
+        top_p = chat_options.top_p,
+        max_tokens = chat_options.max_tokens,
+        stop = chat_options.stop,
+        tools = chat_options.tools,
+        tool_choice = chat_options.tool_choice,
+        response_format = chat_options.response_format,
+        additional = additional,
+    )
 end
 
 # ── Core Run Implementation ──────────────────────────────────────────────────
@@ -166,6 +206,7 @@ function run_agent(
     # Build session context
     ctx = SessionContext(
         session_id = sess.id,
+        service_session_id = sess.thread_id,
         input_messages = input_messages,
         options = options !== nothing ? Dict{String, Any}("chat_options" => options) : Dict{String, Any}(),
     )
@@ -218,6 +259,7 @@ function run_agent_streaming(
 
     ctx = SessionContext(
         session_id = sess.id,
+        service_session_id = sess.thread_id,
         input_messages = input_messages,
         options = options !== nothing ? Dict{String, Any}("chat_options" => options) : Dict{String, Any}(),
     )
@@ -298,6 +340,18 @@ function _execute_agent_run(
 
         chat_response = apply_chat_middleware(agent.chat_middlewares, chat_ctx, chat_handler)
 
+        # Handle middleware termination (result is not a ChatResponse)
+        if !(chat_response isa ChatResponse)
+            term_text = string(chat_response)
+            return AgentResponse(
+                messages = [Message(role=:assistant, contents=[text_content(term_text)])],
+                finish_reason = STOP,
+            )
+        end
+
+        _sync_service_session!(session, ctx, chat_response.conversation_id)
+        chat_options = _refresh_chat_options_thread_id(chat_options, ctx)
+
         # Check for tool calls in response
         tool_calls = Content[]
         for msg in chat_response.messages
@@ -312,9 +366,13 @@ function _execute_agent_run(
             # No tool calls — return final response
             return AgentResponse(
                 messages = chat_response.messages,
+                response_id = chat_response.response_id,
+                conversation_id = chat_response.conversation_id,
                 finish_reason = chat_response.finish_reason,
                 usage_details = chat_response.usage_details,
                 model_id = chat_response.model_id,
+                additional_properties = chat_response.additional_properties,
+                raw_representation = chat_response.raw_representation,
             )
         end
 
@@ -358,6 +416,18 @@ function _execute_agent_run_streaming(
 
         updates_channel = apply_chat_middleware(agent.chat_middlewares, chat_ctx, chat_handler)
 
+        # Handle middleware termination in streaming
+        if !(updates_channel isa Channel)
+            term_text = string(updates_channel)
+            term_update = AgentResponseUpdate(
+                role = :assistant,
+                contents = [text_content(term_text)],
+                finish_reason = STOP,
+            )
+            try; put!(channel, term_update); catch; end
+            return
+        end
+
         # Collect updates and forward to caller
         updates = ChatResponseUpdate[]
         for update in updates_channel
@@ -369,6 +439,9 @@ function _execute_agent_run_streaming(
                 finish_reason = update.finish_reason,
                 model_id = update.model_id,
                 usage_details = update.usage_details,
+                response_id = update.response_id,
+                conversation_id = update.conversation_id,
+                raw_representation = update.raw_representation,
             )
             try
                 put!(channel, agent_update)
@@ -380,6 +453,8 @@ function _execute_agent_run_streaming(
 
         # Build complete response from updates
         chat_response = ChatResponse(updates)
+        _sync_service_session!(session, ctx, chat_response.conversation_id)
+        chat_options = _refresh_chat_options_thread_id(chat_options, ctx)
 
         # Check for tool calls
         tool_calls = Content[]
@@ -394,9 +469,13 @@ function _execute_agent_run_streaming(
         if isempty(tool_calls)
             return AgentResponse(
                 messages = chat_response.messages,
+                response_id = chat_response.response_id,
+                conversation_id = chat_response.conversation_id,
                 finish_reason = chat_response.finish_reason,
                 usage_details = chat_response.usage_details,
                 model_id = chat_response.model_id,
+                additional_properties = chat_response.additional_properties,
+                raw_representation = chat_response.raw_representation,
             )
         end
 
@@ -441,7 +520,44 @@ function _execute_tool_calls(
 )::Vector{Content}
     results = Content[]
 
+    # Check if any tool calls need approval
+    approval_needed = false
     for tc in tool_calls
+        tool = find_tool(tools, something(tc.name, ""))
+        if tool !== nothing && tool.approval_mode == :always_require
+            approval_needed = true
+            break
+        end
+    end
+
+    if approval_needed
+        # Return approval requests for all tool calls in this batch
+        for tc in tool_calls
+            push!(results, function_approval_request_content(
+                something(tc.call_id, ""),
+                tc,
+            ))
+        end
+        return results
+    end
+
+    for tc in tool_calls
+        # Handle approval responses (from a previous approval request round-trip)
+        if is_approval_response(tc)
+            if tc.approved == true && tc.function_call !== nothing
+                # Execute the approved function call
+                tc = tc.function_call  # unwrap to the original function call
+            else
+                # Rejected — return error result
+                call_id = tc.function_call !== nothing ? something(tc.function_call.call_id, tc.id, "") : something(tc.id, "")
+                push!(results, function_result_content(
+                    call_id, nothing;
+                    exception="Tool call invocation was rejected by user.",
+                ))
+                continue
+            end
+        end
+
         tool = find_tool(tools, something(tc.name, ""))
         if tool === nothing
             push!(results, function_result_content(
@@ -474,7 +590,6 @@ function _execute_tool_calls(
 
         try
             result = apply_function_middleware(agent.function_middlewares, func_ctx, func_handler)
-            # Convert result to string for the LLM
             result_str = result isa AbstractString ? result : JSON3.write(result)
             push!(results, function_result_content(
                 something(tc.call_id, ""),
@@ -602,4 +717,59 @@ function with_options(agent::Agent, options::ChatOptions)::Agent
     new_agent = deepcopy(agent)
     new_agent.options = options
     return new_agent
+end
+
+# ── Agent as Tool ────────────────────────────────────────────────────────────
+
+"""
+    as_tool(agent::Agent; description=nothing, propagate_session=false) -> FunctionTool
+
+Convert an agent into a FunctionTool so it can be used as a tool by other agents.
+When invoked, runs the agent with the input message and returns the text response.
+
+# Arguments
+- `agent`: The agent to wrap.
+- `description`: Override description (defaults to agent.description or agent.name).
+- `propagate_session`: If true, share the calling agent's session with this agent.
+
+# Example
+```julia
+research_agent = Agent(name="researcher", client=client, instructions="Research topics thoroughly")
+main_agent = Agent(name="main", client=client, instructions="You have a research assistant",
+                   tools=[as_tool(research_agent)])
+```
+"""
+function as_tool(agent::Agent;
+                 description::Union{Nothing, String}=nothing,
+                 propagate_session::Bool=false)::FunctionTool
+    desc = if description !== nothing
+        description
+    elseif !isempty(agent.description)
+        agent.description
+    else
+        "Run the $(agent.name) agent with the given input message."
+    end
+    tool_name = replace(lowercase(agent.name), r"[^a-z0-9_]" => "_")
+
+    func = (input::String) -> begin
+        session = propagate_session ? nothing : AgentSession()
+        response = run_agent(agent, input; session=session)
+        return get_text(response)
+    end
+
+    FunctionTool(
+        name = tool_name,
+        description = desc,
+        func = func,
+        parameters = Dict{String, Any}(
+            "type" => "object",
+            "properties" => Dict{String, Any}(
+                "input" => Dict{String, Any}(
+                    "type" => "string",
+                    "description" => "The message to send to the $(agent.name) agent.",
+                ),
+            ),
+            "required" => ["input"],
+        ),
+    )
 end

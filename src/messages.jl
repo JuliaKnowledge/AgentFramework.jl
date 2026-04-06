@@ -236,3 +236,153 @@ function message_from_dict(d::Dict{String, Any})::Message
         additional_properties = get(d, "additional_properties", Dict{String, Any}()),
     )
 end
+
+# ── Message Group Annotations ───────────────────────────────────────────────
+
+"""
+    MessageGroup
+
+A logical group of consecutive messages with a label and optional metadata.
+Used by compaction strategies to identify and operate on message boundaries.
+
+# Fields
+- `label::String`: Human-readable group label (e.g., "tool_calls", "system", "user_turn_3").
+- `start_index::Int`: First message index in the group (1-based).
+- `end_index::Int`: Last message index in the group (1-based, inclusive).
+- `metadata::Dict{String, Any}`: Arbitrary metadata (e.g., token counts, importance scores).
+"""
+Base.@kwdef struct MessageGroup
+    label::String
+    start_index::Int
+    end_index::Int
+    metadata::Dict{String, Any} = Dict{String, Any}()
+end
+
+Base.length(g::MessageGroup) = g.end_index - g.start_index + 1
+
+"""
+    group_messages(messages::Vector{Message}; by=:role) -> Vector{MessageGroup}
+
+Partition messages into groups based on a grouping strategy.
+
+# Strategies
+- `:role` (default): consecutive messages with the same role form a group.
+- `:tool_calls`: tool_call + tool_result pairs form their own groups.
+- `:turns`: alternating user/assistant turns form groups.
+"""
+function group_messages(messages::Vector{Message}; by::Symbol=:role)::Vector{MessageGroup}
+    isempty(messages) && return MessageGroup[]
+    if by == :role
+        return _group_by_role(messages)
+    elseif by == :tool_calls
+        return _group_by_tool_calls(messages)
+    elseif by == :turns
+        return _group_by_turns(messages)
+    else
+        error("Unknown grouping strategy: $by. Use :role, :tool_calls, or :turns.")
+    end
+end
+
+function _group_by_role(messages::Vector{Message})::Vector{MessageGroup}
+    groups = MessageGroup[]
+    start = 1
+    for i in 2:length(messages)
+        if messages[i].role != messages[start].role
+            push!(groups, MessageGroup(
+                label = string(messages[start].role),
+                start_index = start,
+                end_index = i - 1,
+            ))
+            start = i
+        end
+    end
+    push!(groups, MessageGroup(
+        label = string(messages[start].role),
+        start_index = start,
+        end_index = length(messages),
+    ))
+    return groups
+end
+
+function _group_by_tool_calls(messages::Vector{Message})::Vector{MessageGroup}
+    groups = MessageGroup[]
+    i = 1
+    n = length(messages)
+    while i <= n
+        msg = messages[i]
+        has_tool_calls = any(c -> c.type == FUNCTION_CALL, msg.contents)
+        if has_tool_calls
+            group_end = i
+            # Consume following tool result messages
+            while group_end + 1 <= n && messages[group_end + 1].role == :tool
+                group_end += 1
+            end
+            push!(groups, MessageGroup(
+                label = "tool_calls",
+                start_index = i,
+                end_index = group_end,
+            ))
+            i = group_end + 1
+        else
+            push!(groups, MessageGroup(
+                label = string(msg.role),
+                start_index = i,
+                end_index = i,
+            ))
+            i += 1
+        end
+    end
+    return groups
+end
+
+function _group_by_turns(messages::Vector{Message})::Vector{MessageGroup}
+    groups = MessageGroup[]
+    i = 1
+    n = length(messages)
+    turn_num = 0
+    while i <= n
+        msg = messages[i]
+        if msg.role == :system
+            push!(groups, MessageGroup(label="system", start_index=i, end_index=i))
+            i += 1
+            continue
+        end
+        turn_num += 1
+        turn_start = i
+        # A turn starts with a user message and extends through assistant+tool messages
+        if msg.role == :user
+            turn_end = i
+            while turn_end + 1 <= n && messages[turn_end + 1].role != :user && messages[turn_end + 1].role != :system
+                turn_end += 1
+            end
+            push!(groups, MessageGroup(
+                label = "turn_$turn_num",
+                start_index = turn_start,
+                end_index = turn_end,
+            ))
+            i = turn_end + 1
+        else
+            push!(groups, MessageGroup(
+                label = "turn_$turn_num",
+                start_index = i,
+                end_index = i,
+            ))
+            i += 1
+        end
+    end
+    return groups
+end
+
+"""
+    annotate_message_groups(messages::Vector{Message}, tokenizer::AbstractTokenizer) -> Vector{MessageGroup}
+
+Create groups using `:turns` strategy and annotate each with a `token_count` in metadata.
+"""
+function annotate_message_groups(messages::Vector{Message}, tokenizer)::Vector{MessageGroup}
+    groups = group_messages(messages; by=:turns)
+    for g in groups
+        group_msgs = messages[g.start_index:g.end_index]
+        g.metadata["token_count"] = count_message_tokens(tokenizer, group_msgs)
+    end
+    return groups
+end

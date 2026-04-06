@@ -1,0 +1,304 @@
+---
+title: "Migration Guides: Semantic Kernel and AutoGen"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    toc: true
+engine: julia
+---
+
+## Overview
+
+This vignette is a translation guide for developers moving from **Semantic Kernel**
+or **AutoGen** to `AgentFramework.jl`. The core Julia APIs are intentionally
+small and explicit:
+
+- an `Agent` wraps a chat client, instructions, and tools,
+- an `AgentSession` carries explicit conversation state,
+- context providers add memory and history,
+- workflows model multi-agent orchestration directly.
+
+If you already understand the mental model of SK kernels, plugins, teams, or
+AutoGen assistants, group chats, and swarms, the fastest path is to map those
+concepts onto the Julia primitives shown here.
+
+For lower-friction first ports, `AgentFramework.jl` also exports a small set of
+compatibility helpers: `ChatCompletionAgent`, `AssistantAgent`,
+`RoundRobinGroupChat`, `SelectorGroupChat`, and `MagenticOneGroupChat`.
+
+By the end you will know how to:
+
+1. Translate common Semantic Kernel concepts into `AgentFramework.jl`.
+2. Translate common AutoGen concepts into `AgentFramework.jl`.
+3. Port a basic single-agent flow with explicit session state.
+4. Replace plugin or tool registration with Julia's `@tool` macro.
+5. Choose the right orchestration primitive for group chat, handoff, or
+   planner-style workflows.
+
+## Setup
+
+```{julia}
+#| output: false
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## Semantic Kernel → AgentFramework.jl
+
+| Semantic Kernel concept | AgentFramework.jl start point | Notes |
+|---|---|---|
+| `Kernel` + `ChatCompletionAgent` | `ChatCompletionAgent` or `Agent` + a chat client such as `OllamaChatClient`, `OpenAIChatClient`, or `AzureOpenAIChatClient` | The compatibility constructor accepts `model_client` and `system_message`, then forwards into the standard Julia `Agent`. |
+| `@kernel_function` plugin methods | `@tool` or `FunctionTool` | The Julia `@tool` macro infers JSON schema from the function signature. |
+| Implicit thread or chat history | `create_session(agent)` + `AgentSession` | Sessions are explicit rather than hidden inside the agent runtime. |
+| Chat history reducers / memory plugins | `InMemoryHistoryProvider`, `FileHistoryProvider`, `MemoryContextProvider` | History and memory are context providers that run before and after each agent turn. |
+| Filters / invocation hooks | agent, chat, and function middleware | Middleware is split into three layers instead of a single filter abstraction. |
+| Team or process orchestration | `SequentialBuilder`, `ConcurrentBuilder`, `GroupChatBuilder`, `MagenticBuilder`, or raw `WorkflowBuilder` | Julia treats orchestration as a workflow problem, not a separate kernel subsystem. |
+
+## AutoGen → AgentFramework.jl
+
+| AutoGen concept | AgentFramework.jl start point | Notes |
+|---|---|---|
+| `AssistantAgent` | `AssistantAgent` or `Agent` | The compatibility constructor gives you a lower-friction first port, but still returns a normal Julia `Agent`. |
+| `UserProxyAgent` | Call `run_agent` from your application code, or use `request_info` in workflows | Human input is usually handled by the app layer or workflow events. |
+| `FunctionTool` wrappers | `@tool` or `FunctionTool` | The Julia macro removes most schema boilerplate. |
+| Conversation state | `AgentSession` plus optional history providers | Agents are stateless by default; sessions opt into continuity. |
+| `RoundRobinGroupChat` | `RoundRobinGroupChat` or `GroupChatBuilder` | The helper wraps Julia's group-chat workflow with the default round-robin selector. |
+| `SelectorGroupChat` | `SelectorGroupChat` or `GroupChatBuilder` | Use either a selection function or an orchestrator agent. |
+| Swarm-style agent routing | `HandoffTool` + `handoff_as_function_tool` | A triage agent can route to specialists through handoff tools. |
+| `MagenticOneGroupChat` | `MagenticOneGroupChat` or `MagenticBuilder` | The helper forwards into the standard Magentic workflow builder. |
+| Termination conditions | `with_termination`, `max_rounds`, or workflow completion | Termination is configured on the workflow rather than a chat loop wrapper. |
+
+## Migration Pattern 1: Basic Agent + Explicit Session
+
+The biggest behavioral difference is **state management**. SK and AutoGen often
+hide thread reuse inside higher-level agent objects. In `AgentFramework.jl`, the
+agent is lightweight and the session is explicit.
+
+```{julia}
+client = OllamaChatClient(model = "qwen3:8b")
+
+agent = Agent(
+    name = "MigrationBot",
+    instructions = "You are a concise assistant for migration examples.",
+    client = client,
+    context_providers = [InMemoryHistoryProvider()],
+)
+```
+
+```{julia}
+#| eval: false
+session = create_session(agent)
+
+first = run_agent(agent, "My name is Alice."; session = session)
+println(first.text)
+
+second = run_agent(agent, "What is my name?"; session = session)
+println(second.text)
+```
+
+Use this pattern whenever you are porting code that assumes:
+
+- an SK thread is reused automatically,
+- an AutoGen chat carries conversation state implicitly,
+- or a long-running assistant should remember previous user turns.
+
+If you want durable memory beyond chat history, combine a memory store with a
+`MemoryContextProvider`:
+
+```{julia}
+#| eval: false
+store = SQLiteMemoryStore("migration_memories.sqlite")
+memory_provider = MemoryContextProvider(store = store, source_id = "memory")
+
+agent = Agent(
+    name = "MemoryBot",
+    instructions = "Use retrieved memory when it is relevant.",
+    client = client,
+    context_providers = [InMemoryHistoryProvider(), memory_provider],
+)
+```
+
+## Migration Pattern 2: Plugins and Tools
+
+If you used SK plugins or AutoGen function tools, the Julia equivalent is
+usually a plain Julia function annotated with `@tool`.
+
+```{julia}
+@tool function lookup_invoice(invoice_id::String)
+    "Look up invoice status by invoice id."
+    return "Invoice $(invoice_id) is approved and queued for payment."
+end
+
+tool_agent = Agent(
+    name = "BillingAgent",
+    instructions = "Use tools when they help answer billing questions.",
+    client = client,
+    tools = [lookup_invoice],
+)
+```
+
+```{julia}
+#| eval: false
+response = run_agent(tool_agent, "What is the status of invoice INV-1024?")
+println(response.text)
+```
+
+### Practical translation rules
+
+1. **Semantic Kernel plugin class** → split the callable parts into Julia
+   functions and mark them with `@tool`.
+2. **AutoGen `FunctionTool(...)` boilerplate** → replace with `@tool` unless you
+   need to construct a `FunctionTool` manually.
+3. **Tool iteration settings** → `Agent` already runs a tool loop for you; tune
+   `max_tool_iterations` only when you need stricter control.
+
+## Migration Pattern 3: Streaming and Structured Responses
+
+Streaming is a first-class API rather than a mode on a high-level assistant
+class. Use `run_agent_streaming` to consume updates, then call
+`get_final_response` when you need the assembled result.
+
+```{julia}
+#| eval: false
+stream = run_agent_streaming(agent, "Explain the migration in three short steps.")
+
+for update in stream
+    print(get_text(update))
+end
+println()
+
+final_response = get_final_response(stream)
+println(final_response.finish_reason)
+```
+
+Structured output is configured through `ChatOptions(response_format = ...)`
+instead of a separate planner or adapter layer. See
+[05 — Structured Output](../05_structured_output/05_structured_output.qmd) for
+the full pattern.
+
+## Migration Pattern 4: Multi-Agent Orchestration
+
+`AgentFramework.jl` treats multi-agent coordination as a workflow concern. That
+means the migration question is usually:
+
+> Which workflow or handoff primitive matches the coordination pattern I already
+> have?
+
+| Existing pattern | Julia primitive | When to choose it |
+|---|---|---|
+| Fixed round-robin or review chain | `SequentialBuilder` | One participant should always follow another. |
+| Parallel analysis and aggregation | `ConcurrentBuilder` | Multiple agents should see the same input concurrently. |
+| Speaker selection or managed discussion | `GroupChatBuilder` | Turn order depends on selection logic or an orchestrator agent. |
+| Magentic-style planning workflow | `MagenticBuilder` | You want a planner/worker loop with task ledgers and optional plan review. |
+| Swarm-like delegation to specialists | `HandoffTool` | A triage agent decides which specialist should take over. |
+
+### Example: Round-Robin or Review Chain
+
+This is the closest Julia equivalent to SK team sequencing or an AutoGen
+round-robin chat.
+
+```{julia}
+writer = Agent(
+    name = "Writer",
+    instructions = "Write a short draft.",
+    client = client,
+)
+
+reviewer = Agent(
+    name = "Reviewer",
+    instructions = "Review the draft and improve it.",
+    client = client,
+)
+```
+
+```{julia}
+#| eval: false
+workflow = build(SequentialBuilder(participants = [writer, reviewer]))
+result = run_workflow(workflow, "Draft a release note for the new feature.")
+
+conversation = only(get_outputs(result))
+println(get_text(conversation[end]))
+```
+
+### Example: Swarm-Style Routing with Handoffs
+
+For AutoGen-style swarm delegation, build a triage agent and expose specialist
+agents as handoff tools.
+
+```{julia}
+math_agent = Agent(
+    name = "MathExpert",
+    instructions = "Handle mathematics questions only.",
+    client = client,
+)
+
+math_handoff = HandoffTool(
+    name = "transfer_to_math",
+    description = "Transfer the conversation to the math specialist.",
+    target = math_agent,
+)
+
+triage_agent = Agent(
+    name = "TriageAgent",
+    instructions = "Route math questions to the math specialist.",
+    client = client,
+    tools = [handoff_as_function_tool(math_handoff)],
+)
+```
+
+## Human-in-the-Loop Instead of `UserProxyAgent`
+
+There is no dedicated `UserProxyAgent` type. In Julia, the application usually
+plays that role directly:
+
+- call `run_agent(...)` when you want synchronous user-driven turns,
+- call `run_agent_streaming(...)` when the UI should display tokens live,
+- or use workflow `request_info(...)` events when a multi-step process must
+  pause for human approval or additional input.
+
+For workflow-based approval flows, see
+[10 — Advanced Workflows](../10_advanced_workflows/10_advanced_workflows.qmd).
+
+## Migration Checklist
+
+When porting an existing SK or AutoGen prototype, this checklist usually keeps
+the translation grounded:
+
+1. **Pick the chat client first** — `OllamaChatClient`, `OpenAIChatClient`,
+   `AzureOpenAIChatClient`, `AnthropicChatClient`, or another provider package.
+2. **Translate tools second** — move plugin or function definitions into `@tool`
+   functions.
+3. **Make state explicit** — add `AgentSession` and history providers only where
+   conversation continuity is actually required.
+4. **Choose orchestration by topology** — sequence, concurrency, managed group
+   chat, Magentic planning, or handoff-based routing.
+5. **Add middleware last** — use it for cross-cutting concerns such as retries,
+   tracing, policy enforcement, or request shaping.
+
+## Where to Go Next
+
+- [02 — Tools](../02_tools/02_tools.qmd)
+- [03 — Multi-Turn Sessions](../03_multi_turn/03_multi_turn.qmd)
+- [04 — Streaming](../04_streaming/04_streaming.qmd)
+- [06 — Middleware](../06_middleware/06_middleware.qmd)
+- [07 — Memory and Context Providers](../07_memory/07_memory.qmd)
+- [08 — Handoffs](../08_handoffs/08_handoffs.qmd)
+- [09 — Workflows](../09_workflows/09_workflows.qmd)
+- [10 — Advanced Workflows](../10_advanced_workflows/10_advanced_workflows.qmd)
+
+## Summary
+
+The main migration shift is from **implicit runtime objects** to **explicit Julia
+primitives**:
+
+1. `Agent` replaces the high-level assistant wrapper.
+2. `AgentSession` makes conversation continuity explicit.
+3. `@tool` replaces plugin or function registration boilerplate.
+4. Context providers handle history and memory injection.
+5. Workflows and handoffs express multi-agent coordination directly.

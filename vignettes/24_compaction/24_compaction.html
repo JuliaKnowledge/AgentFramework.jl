@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Simon Frost">
+
+<title>Message Compaction</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="24_compaction_files/libs/clipboard/clipboard.min.js"></script>
+<script src="24_compaction_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="24_compaction_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="24_compaction_files/libs/quarto-html/popper.min.js"></script>
+<script src="24_compaction_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="24_compaction_files/libs/quarto-html/anchor.min.js"></script>
+<link href="24_compaction_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="24_compaction_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="24_compaction_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="24_compaction_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="24_compaction_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#the-problem-context-window-limits" id="toc-the-problem-context-window-limits" class="nav-link" data-scroll-target="#the-problem-context-window-limits">The Problem: Context Window Limits</a></li>
+  <li><a href="#token-estimation" id="toc-token-estimation" class="nav-link" data-scroll-target="#token-estimation">Token Estimation</a></li>
+  <li><a href="#compactionconfig" id="toc-compactionconfig" class="nav-link" data-scroll-target="#compactionconfig">CompactionConfig</a></li>
+  <li><a href="#compaction-strategies" id="toc-compaction-strategies" class="nav-link" data-scroll-target="#compaction-strategies">Compaction Strategies</a>
+  <ul class="collapse">
+  <li><a href="#no_compaction-never-compact" id="toc-no_compaction-never-compact" class="nav-link" data-scroll-target="#no_compaction-never-compact">1. <code>NO_COMPACTION</code> — Never Compact</a></li>
+  <li><a href="#sliding_window-keep-recent-messages" id="toc-sliding_window-keep-recent-messages" class="nav-link" data-scroll-target="#sliding_window-keep-recent-messages">2. <code>SLIDING_WINDOW</code> — Keep Recent Messages</a></li>
+  <li><a href="#drop_oldest-drop-from-the-front" id="toc-drop_oldest-drop-from-the-front" class="nav-link" data-scroll-target="#drop_oldest-drop-from-the-front">3. <code>DROP_OLDEST</code> — Drop From the Front</a></li>
+  <li><a href="#truncate-hard-truncation" id="toc-truncate-hard-truncation" class="nav-link" data-scroll-target="#truncate-hard-truncation">4. <code>TRUNCATE</code> — Hard Truncation</a></li>
+  <li><a href="#summarize_oldest-replace-old-messages-with-a-summary" id="toc-summarize_oldest-replace-old-messages-with-a-summary" class="nav-link" data-scroll-target="#summarize_oldest-replace-old-messages-with-a-summary">5. <code>SUMMARIZE_OLDEST</code> — Replace Old Messages With a Summary</a></li>
+  <li><a href="#selective_tool_call-drop-tool-call-pairs" id="toc-selective_tool_call-drop-tool-call-pairs" class="nav-link" data-scroll-target="#selective_tool_call-drop-tool-call-pairs">6. <code>SELECTIVE_TOOL_CALL</code> — Drop Tool Call Pairs</a></li>
+  <li><a href="#tool_result_only-replace-tool-results-with-placeholders" id="toc-tool_result_only-replace-tool-results-with-placeholders" class="nav-link" data-scroll-target="#tool_result_only-replace-tool-results-with-placeholders">7. <code>TOOL_RESULT_ONLY</code> — Replace Tool Results With Placeholders</a></li>
+  </ul></li>
+  <li><a href="#checking-whether-compaction-is-needed" id="toc-checking-whether-compaction-is-needed" class="nav-link" data-scroll-target="#checking-whether-compaction-is-needed">Checking Whether Compaction Is Needed</a></li>
+  <li><a href="#compactionpipeline-chaining-strategies" id="toc-compactionpipeline-chaining-strategies" class="nav-link" data-scroll-target="#compactionpipeline-chaining-strategies">CompactionPipeline — Chaining Strategies</a></li>
+  <li><a href="#strategy-comparison" id="toc-strategy-comparison" class="nav-link" data-scroll-target="#strategy-comparison">Strategy Comparison</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="24_compaction.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="24_compaction.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Message Compaction</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Simon Frost </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>LLMs have finite context windows. As conversations grow — especially those involving tool calls with verbose results — the message history can exceed the model’s token limit, causing failures or degraded performance. <strong>Message compaction</strong> selectively reduces the history while preserving the information that matters most.</p>
+<p>In this vignette you will learn how to:</p>
+<ol type="1">
+<li>Estimate token counts for text, messages, and conversations.</li>
+<li>Configure compaction with <code>CompactionConfig</code>.</li>
+<li>Choose among seven built-in <code>CompactionStrategy</code> options.</li>
+<li>Check whether compaction is needed with <code>needs_compaction</code>.</li>
+<li>Apply compaction with <code>compact_messages</code>.</li>
+<li>Chain strategies using <code>CompactionPipeline</code>.</li>
+</ol>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>No external services are required — compaction is a purely local operation on message lists.</p>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The <code>SUMMARIZE_OLDEST</code> strategy produces a simple text summary by default. For LLM-powered summarization you would pass the summary text through a chat client at the agent level.</p>
+</div>
+</div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="the-problem-context-window-limits" class="level2">
+<h2 class="anchored" data-anchor-id="the-problem-context-window-limits">The Problem: Context Window Limits</h2>
+<p>Consider a multi-turn agent that uses tools. Each turn adds user messages, assistant replies, tool calls, and tool results. After 30–50 turns the history can easily reach 50 000+ tokens — well beyond a 4 096 or 8 192 token window.</p>
+<div id="4" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build a long conversation</span></span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> Message[]</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a><span class="fu">push!</span>(messages, <span class="fu">Message</span>(role<span class="op">=:</span>system, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"You are a helpful assistant."</span>)]))</span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> i <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="fl">50</span></span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">push!</span>(messages, <span class="fu">Message</span>(role<span class="op">=:</span>user, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"Question </span><span class="sc">$</span>i<span class="st">: "</span> <span class="op">*</span> <span class="fu">repeat</span>(<span class="st">"x"</span>, <span class="fl">200</span>))]))</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">push!</span>(messages, <span class="fu">Message</span>(role<span class="op">=:</span>assistant, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"Answer </span><span class="sc">$</span>i<span class="st">: "</span> <span class="op">*</span> <span class="fu">repeat</span>(<span class="st">"y"</span>, <span class="fl">300</span>))]))</span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>total <span class="op">=</span> <span class="fu">estimate_messages_tokens</span>(messages)</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Total estimated tokens: </span><span class="sc">$</span>total<span class="st">"</span>)   <span class="co"># well over 4096</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>Without compaction, the agent must either truncate blindly or fail. The compaction module gives you fine-grained control over <em>what</em> to keep and <em>what</em> to discard.</p>
+</section>
+<section id="token-estimation" class="level2">
+<h2 class="anchored" data-anchor-id="token-estimation">Token Estimation</h2>
+<p>AgentFramework provides a character-based heuristic for token counting. The default ratio of 4.0 characters per token is a reasonable approximation for English text with GPT-style tokenizers.</p>
+<div id="6" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Estimate tokens for a string</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>text <span class="op">=</span> <span class="st">"Hello, how are you today?"</span></span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a>tokens <span class="op">=</span> <span class="fu">estimate_tokens</span>(text)   <span class="co"># ~7 (ceil(25 / 4.0))</span></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Text tokens: </span><span class="sc">$</span>tokens<span class="st">"</span>)</span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a><span class="co"># Estimate tokens for a single message (includes role overhead)</span></span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>msg <span class="op">=</span> <span class="fu">Message</span>(ROLE_USER, [<span class="fu">text_content</span>(text)])</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>msg_tokens <span class="op">=</span> <span class="fu">estimate_message_tokens</span>(msg)</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Message tokens: </span><span class="sc">$</span>msg_tokens<span class="st">"</span>)</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a><span class="co"># Estimate tokens for an entire conversation</span></span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>messages <span class="op">=</span> [</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>    msg,</span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(ROLE_ASSISTANT, [<span class="fu">text_content</span>(<span class="st">"I'm fine, thanks!"</span>)])</span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>total <span class="op">=</span> <span class="fu">estimate_messages_tokens</span>(messages)</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Conversation tokens: </span><span class="sc">$</span>total<span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The functions accept a <code>chars_per_token</code> keyword to adjust the ratio for different models or languages:</p>
+<div id="8" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Tighter estimate for a model with a smaller vocabulary</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>tokens_tight <span class="op">=</span> <span class="fu">estimate_tokens</span>(text; chars_per_token<span class="op">=</span><span class="fl">3.5</span>)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Tight estimate: </span><span class="sc">$</span>tokens_tight<span class="st">"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="compactionconfig" class="level2">
+<h2 class="anchored" data-anchor-id="compactionconfig">CompactionConfig</h2>
+<p>All compaction behaviour is controlled through a <code>CompactionConfig</code>:</p>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> SLIDING_WINDOW,   <span class="co"># which compaction strategy to apply</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">4096</span>,           <span class="co"># token budget for the message history</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>    keep_system <span class="op">=</span> <span class="cn">true</span>,          <span class="co"># always preserve system/developer messages</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>    keep_recent <span class="op">=</span> <span class="fl">4</span>,             <span class="co"># always keep the last N non-system messages</span></span>
+<span id="cb5-6"><a href="#cb5-6" aria-hidden="true" tabindex="-1"></a>    chars_per_token <span class="op">=</span> <span class="fl">4.0</span>,       <span class="co"># character-to-token ratio for estimation</span></span>
+<span id="cb5-7"><a href="#cb5-7" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The <code>summary_prompt</code> field is used only by <code>SUMMARIZE_OLDEST</code> and defaults to a reasonable instruction for conversation summarization.</p>
+</section>
+<section id="compaction-strategies" class="level2">
+<h2 class="anchored" data-anchor-id="compaction-strategies">Compaction Strategies</h2>
+<p>AgentFramework provides seven strategies via the <code>CompactionStrategy</code> enum. Each makes different trade-offs between context preservation and budget compliance.</p>
+<section id="no_compaction-never-compact" class="level3">
+<h3 class="anchored" data-anchor-id="no_compaction-never-compact">1. <code>NO_COMPACTION</code> — Never Compact</h3>
+<p>The default. Messages are returned unchanged regardless of length. Use this when you manage context externally or when the model has a very large window.</p>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>config_none <span class="op">=</span> <span class="fu">CompactionConfig</span>(strategy<span class="op">=</span>NO_COMPACTION, max_tokens<span class="op">=</span><span class="fl">4096</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> <span class="fu">compact_messages</span>(messages, config_none)</span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="fu">length</span>(result) <span class="op">==</span> <span class="fu">length</span>(messages))  <span class="co"># true — no change</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="sliding_window-keep-recent-messages" class="level3">
+<h3 class="anchored" data-anchor-id="sliding_window-keep-recent-messages">2. <code>SLIDING_WINDOW</code> — Keep Recent Messages</h3>
+<p>Keeps system messages plus as many recent non-system messages as fit within the token budget. The most common strategy for general chat.</p>
+<div id="14" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>config_window <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> SLIDING_WINDOW,</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">2048</span>,</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>    keep_system <span class="op">=</span> <span class="cn">true</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(messages, config_window)</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Kept </span><span class="sc">$</span>(<span class="fu">length</span>(compacted))<span class="st"> of </span><span class="sc">$</span>(<span class="fu">length</span>(messages))<span class="st"> messages"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="drop_oldest-drop-from-the-front" class="level3">
+<h3 class="anchored" data-anchor-id="drop_oldest-drop-from-the-front">3. <code>DROP_OLDEST</code> — Drop From the Front</h3>
+<p>Keeps system messages and the last <code>keep_recent</code> messages unconditionally, then adds back older messages from newest to oldest as long as they fit the budget.</p>
+<div id="16" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a>config_drop <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> DROP_OLDEST,</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">2048</span>,</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>    keep_system <span class="op">=</span> <span class="cn">true</span>,</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>    keep_recent <span class="op">=</span> <span class="fl">6</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(messages, config_drop)</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Kept </span><span class="sc">$</span>(<span class="fu">length</span>(compacted))<span class="st"> of </span><span class="sc">$</span>(<span class="fu">length</span>(messages))<span class="st"> messages"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="truncate-hard-truncation" class="level3">
+<h3 class="anchored" data-anchor-id="truncate-hard-truncation">4. <code>TRUNCATE</code> — Hard Truncation</h3>
+<p>Like <code>SLIDING_WINDOW</code>, but can split <em>within</em> the oldest kept message by truncating its text content. Use when you need strict budget compliance.</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>config_trunc <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> TRUNCATE,</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">2048</span>,</span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a>    keep_system <span class="op">=</span> <span class="cn">true</span>,</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(messages, config_trunc)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Kept </span><span class="sc">$</span>(<span class="fu">length</span>(compacted))<span class="st"> messages (oldest may be truncated)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="summarize_oldest-replace-old-messages-with-a-summary" class="level3">
+<h3 class="anchored" data-anchor-id="summarize_oldest-replace-old-messages-with-a-summary">5. <code>SUMMARIZE_OLDEST</code> — Replace Old Messages With a Summary</h3>
+<p>Splits the history into old and recent segments. The old messages are replaced with a single system message containing a text summary. This preserves context better than dropping, at the cost of some fidelity.</p>
+<div id="20" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb10"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb10-1"><a href="#cb10-1" aria-hidden="true" tabindex="-1"></a>config_summary <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb10-2"><a href="#cb10-2" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> SUMMARIZE_OLDEST,</span>
+<span id="cb10-3"><a href="#cb10-3" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">2048</span>,</span>
+<span id="cb10-4"><a href="#cb10-4" aria-hidden="true" tabindex="-1"></a>    keep_recent <span class="op">=</span> <span class="fl">6</span>,</span>
+<span id="cb10-5"><a href="#cb10-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb10-6"><a href="#cb10-6" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(messages, config_summary)</span>
+<span id="cb10-7"><a href="#cb10-7" aria-hidden="true" tabindex="-1"></a><span class="co"># First non-system message is the summary</span></span>
+<span id="cb10-8"><a href="#cb10-8" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(compacted[<span class="fl">2</span>].contents[<span class="fl">1</span>].text)  <span class="co"># "[Conversation summary: ...]"</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<div class="callout callout-style-default callout-note callout-titled">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+Note
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The built-in summarization concatenates old messages into a bracketed summary. For higher-quality summaries, pipe the summary text through an LLM at the agent middleware level.</p>
+</div>
+</div>
+</section>
+<section id="selective_tool_call-drop-tool-call-pairs" class="level3">
+<h3 class="anchored" data-anchor-id="selective_tool_call-drop-tool-call-pairs">6. <code>SELECTIVE_TOOL_CALL</code> — Drop Tool Call Pairs</h3>
+<p>Identifies complete tool-call / tool-result pairs and removes the oldest ones first. Conversational messages (user/assistant text) are never removed. Ideal for tool-heavy agents where tool history is less important than dialogue.</p>
+<div id="22" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Build a conversation with tool calls</span></span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a>tool_messages <span class="op">=</span> Message[</span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>system, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"You are a calculator agent."</span>)]),</span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>user, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"What is 2+2?"</span>)]),</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>assistant, contents<span class="op">=</span>[<span class="fu">function_call_content</span>(<span class="st">"call_1"</span>, <span class="st">"add"</span>, <span class="st">"{</span><span class="sc">\"</span><span class="st">a</span><span class="sc">\"</span><span class="st">:2,</span><span class="sc">\"</span><span class="st">b</span><span class="sc">\"</span><span class="st">:2}"</span>)]),</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>tool, contents<span class="op">=</span>[<span class="fu">function_result_content</span>(<span class="st">"call_1"</span>, <span class="st">"4"</span>)]),</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>assistant, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"2+2 = 4"</span>)]),</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>user, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"And 10*3?"</span>)]),</span>
+<span id="cb11-9"><a href="#cb11-9" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>assistant, contents<span class="op">=</span>[<span class="fu">function_call_content</span>(<span class="st">"call_2"</span>, <span class="st">"multiply"</span>, <span class="st">"{</span><span class="sc">\"</span><span class="st">a</span><span class="sc">\"</span><span class="st">:10,</span><span class="sc">\"</span><span class="st">b</span><span class="sc">\"</span><span class="st">:3}"</span>)]),</span>
+<span id="cb11-10"><a href="#cb11-10" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>tool, contents<span class="op">=</span>[<span class="fu">function_result_content</span>(<span class="st">"call_2"</span>, <span class="st">"30"</span>)]),</span>
+<span id="cb11-11"><a href="#cb11-11" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Message</span>(role<span class="op">=:</span>assistant, contents<span class="op">=</span>[<span class="fu">text_content</span>(<span class="st">"10*3 = 30"</span>)]),</span>
+<span id="cb11-12"><a href="#cb11-12" aria-hidden="true" tabindex="-1"></a>]</span>
+<span id="cb11-13"><a href="#cb11-13" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-14"><a href="#cb11-14" aria-hidden="true" tabindex="-1"></a>config_tools <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb11-15"><a href="#cb11-15" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> SELECTIVE_TOOL_CALL,</span>
+<span id="cb11-16"><a href="#cb11-16" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">100</span>,    <span class="co"># very tight budget to force removal</span></span>
+<span id="cb11-17"><a href="#cb11-17" aria-hidden="true" tabindex="-1"></a>    keep_recent <span class="op">=</span> <span class="fl">4</span>,</span>
+<span id="cb11-18"><a href="#cb11-18" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-19"><a href="#cb11-19" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(tool_messages, config_tools)</span>
+<span id="cb11-20"><a href="#cb11-20" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Kept </span><span class="sc">$</span>(<span class="fu">length</span>(compacted))<span class="st"> of </span><span class="sc">$</span>(<span class="fu">length</span>(tool_messages))<span class="st"> messages"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="tool_result_only-replace-tool-results-with-placeholders" class="level3">
+<h3 class="anchored" data-anchor-id="tool_result_only-replace-tool-results-with-placeholders">7. <code>TOOL_RESULT_ONLY</code> — Replace Tool Results With Placeholders</h3>
+<p>Keeps tool <em>calls</em> visible (so the model knows it used a tool) but replaces verbose tool <em>results</em> with <code>"[Tool result truncated]"</code>. Only results outside the last <code>keep_recent</code> messages are replaced.</p>
+<div id="24" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb12"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb12-1"><a href="#cb12-1" aria-hidden="true" tabindex="-1"></a>config_results <span class="op">=</span> <span class="fu">CompactionConfig</span>(</span>
+<span id="cb12-2"><a href="#cb12-2" aria-hidden="true" tabindex="-1"></a>    strategy <span class="op">=</span> TOOL_RESULT_ONLY,</span>
+<span id="cb12-3"><a href="#cb12-3" aria-hidden="true" tabindex="-1"></a>    max_tokens <span class="op">=</span> <span class="fl">200</span>,</span>
+<span id="cb12-4"><a href="#cb12-4" aria-hidden="true" tabindex="-1"></a>    keep_recent <span class="op">=</span> <span class="fl">4</span>,</span>
+<span id="cb12-5"><a href="#cb12-5" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb12-6"><a href="#cb12-6" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(tool_messages, config_results)</span>
+<span id="cb12-7"><a href="#cb12-7" aria-hidden="true" tabindex="-1"></a><span class="co"># Older tool results now show the placeholder</span></span>
+<span id="cb12-8"><a href="#cb12-8" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> msg <span class="kw">in</span> compacted</span>
+<span id="cb12-9"><a href="#cb12-9" aria-hidden="true" tabindex="-1"></a>    <span class="cf">for</span> c <span class="kw">in</span> msg.contents</span>
+<span id="cb12-10"><a href="#cb12-10" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> c.<span class="kw">type</span> <span class="op">==</span> FUNCTION_RESULT</span>
+<span id="cb12-11"><a href="#cb12-11" aria-hidden="true" tabindex="-1"></a>            <span class="fu">println</span>(<span class="st">"Result: "</span>, c.result)</span>
+<span id="cb12-12"><a href="#cb12-12" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb12-13"><a href="#cb12-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb12-14"><a href="#cb12-14" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+</section>
+<section id="checking-whether-compaction-is-needed" class="level2">
+<h2 class="anchored" data-anchor-id="checking-whether-compaction-is-needed">Checking Whether Compaction Is Needed</h2>
+<p>Use <code>needs_compaction</code> to avoid unnecessary work:</p>
+<div id="26" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>config <span class="op">=</span> <span class="fu">CompactionConfig</span>(strategy<span class="op">=</span>SLIDING_WINDOW, max_tokens<span class="op">=</span><span class="fl">4096</span>)</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> <span class="fu">needs_compaction</span>(messages, config)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a>    compacted <span class="op">=</span> <span class="fu">compact_messages</span>(messages, config)</span>
+<span id="cb13-5"><a href="#cb13-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"Compacted </span><span class="sc">$</span>(<span class="fu">length</span>(messages))<span class="st"> → </span><span class="sc">$</span>(<span class="fu">length</span>(compacted))<span class="st"> messages"</span>)</span>
+<span id="cb13-6"><a href="#cb13-6" aria-hidden="true" tabindex="-1"></a><span class="cf">else</span></span>
+<span id="cb13-7"><a href="#cb13-7" aria-hidden="true" tabindex="-1"></a>    compacted <span class="op">=</span> messages</span>
+<span id="cb13-8"><a href="#cb13-8" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"No compaction needed"</span>)</span>
+<span id="cb13-9"><a href="#cb13-9" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><code>needs_compaction</code> returns <code>false</code> when the strategy is <code>NO_COMPACTION</code> or when the estimated token count is within budget.</p>
+</section>
+<section id="compactionpipeline-chaining-strategies" class="level2">
+<h2 class="anchored" data-anchor-id="compactionpipeline-chaining-strategies">CompactionPipeline — Chaining Strategies</h2>
+<p>A single strategy may not be enough. <code>CompactionPipeline</code> applies multiple strategies in sequence — each operating on the output of the previous one. This lets you build layered compaction logic:</p>
+<div id="28" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>pipeline <span class="op">=</span> <span class="fu">CompactionPipeline</span>(strategies<span class="op">=</span>[</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>    <span class="co"># First pass: remove old tool call pairs</span></span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>    <span class="fu">CompactionConfig</span>(strategy<span class="op">=</span>SELECTIVE_TOOL_CALL, max_tokens<span class="op">=</span><span class="fl">8192</span>),</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Second pass: replace remaining tool results with placeholders</span></span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">CompactionConfig</span>(strategy<span class="op">=</span>TOOL_RESULT_ONLY, max_tokens<span class="op">=</span><span class="fl">4096</span>),</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Final pass: sliding window to enforce hard budget</span></span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>    <span class="fu">CompactionConfig</span>(strategy<span class="op">=</span>SLIDING_WINDOW, max_tokens<span class="op">=</span><span class="fl">2048</span>, keep_recent<span class="op">=</span><span class="fl">4</span>),</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>])</span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb14-10"><a href="#cb14-10" aria-hidden="true" tabindex="-1"></a>compacted <span class="op">=</span> <span class="fu">compact_messages</span>(messages, pipeline)</span>
+<span id="cb14-11"><a href="#cb14-11" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Pipeline reduced to </span><span class="sc">$</span>(<span class="fu">length</span>(compacted))<span class="st"> messages"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>The pipeline pattern matches the Python <code>TokenBudgetComposedStrategy</code> and C# <code>PipelineCompactionStrategy</code> — a sequence of progressively more aggressive compaction steps.</p>
+</section>
+<section id="strategy-comparison" class="level2">
+<h2 class="anchored" data-anchor-id="strategy-comparison">Strategy Comparison</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 22%">
+<col style="width: 40%">
+<col style="width: 15%">
+<col style="width: 22%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Strategy</th>
+<th>Preserves Context</th>
+<th>Speed</th>
+<th>Best For</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>NO_COMPACTION</code></td>
+<td>All</td>
+<td>—</td>
+<td>Large context models</td>
+</tr>
+<tr class="even">
+<td><code>SLIDING_WINDOW</code></td>
+<td>Recent only</td>
+<td>Fast</td>
+<td>General chat</td>
+</tr>
+<tr class="odd">
+<td><code>DROP_OLDEST</code></td>
+<td>Recent + system</td>
+<td>Fast</td>
+<td>Simple bots</td>
+</tr>
+<tr class="even">
+<td><code>TRUNCATE</code></td>
+<td>Recent only</td>
+<td>Fastest</td>
+<td>Strict token budgets</td>
+</tr>
+<tr class="odd">
+<td><code>SUMMARIZE_OLDEST</code></td>
+<td>High (via summary)</td>
+<td>Moderate</td>
+<td>Important history</td>
+</tr>
+<tr class="even">
+<td><code>SELECTIVE_TOOL_CALL</code></td>
+<td>Conversation</td>
+<td>Fast</td>
+<td>Tool-heavy agents</td>
+</tr>
+<tr class="odd">
+<td><code>TOOL_RESULT_ONLY</code></td>
+<td>Calls visible</td>
+<td>Fast</td>
+<td>Debug-friendly</td>
+</tr>
+</tbody>
+</table>
+<p><strong>Guidelines:</strong></p>
+<ul>
+<li>Start with <code>SLIDING_WINDOW</code> for most applications.</li>
+<li>Use <code>SELECTIVE_TOOL_CALL</code> or <code>TOOL_RESULT_ONLY</code> for agents that make many tool calls.</li>
+<li>Use <code>SUMMARIZE_OLDEST</code> when conversation history contains important context that should not be lost entirely.</li>
+<li>Use <code>CompactionPipeline</code> when a single strategy is not enough — combine tool-focused and window-based approaches.</li>
+</ul>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 64%">
+<col style="width: 36%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Type / Function</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>CompactionStrategy</code></td>
+<td>Enum: <code>NO_COMPACTION</code>, <code>SLIDING_WINDOW</code>, <code>DROP_OLDEST</code>, <code>TRUNCATE</code>, <code>SUMMARIZE_OLDEST</code>, <code>SELECTIVE_TOOL_CALL</code>, <code>TOOL_RESULT_ONLY</code></td>
+</tr>
+<tr class="even">
+<td><code>CompactionConfig</code></td>
+<td>Configuration struct with <code>strategy</code>, <code>max_tokens</code>, <code>keep_system</code>, <code>keep_recent</code>, <code>chars_per_token</code></td>
+</tr>
+<tr class="odd">
+<td><code>CompactionPipeline</code></td>
+<td>Chain multiple <code>CompactionConfig</code> stages in sequence</td>
+</tr>
+<tr class="even">
+<td><code>estimate_tokens(text)</code></td>
+<td>Heuristic token count for a string</td>
+</tr>
+<tr class="odd">
+<td><code>estimate_message_tokens(msg)</code></td>
+<td>Token count for a single <code>Message</code></td>
+</tr>
+<tr class="even">
+<td><code>estimate_messages_tokens(msgs)</code></td>
+<td>Token count for a conversation</td>
+</tr>
+<tr class="odd">
+<td><code>needs_compaction(msgs, config)</code></td>
+<td>Check if history exceeds the token budget</td>
+</tr>
+<tr class="even">
+<td><code>compact_messages(msgs, config)</code></td>
+<td>Apply a strategy and return compacted messages</td>
+</tr>
+<tr class="odd">
+<td><code>compact_messages(msgs, pipeline)</code></td>
+<td>Apply a pipeline of strategies in sequence</td>
+</tr>
+</tbody>
+</table>
+<p>Key takeaways:</p>
+<ol type="1">
+<li><strong>Token estimation is heuristic</strong> — the <code>chars_per_token</code> ratio (default 4.0) gives a fast approximation without requiring a real tokenizer.</li>
+<li><strong>System messages are protected</strong> by default — set <code>keep_system=true</code> to ensure instructions are never dropped.</li>
+<li><strong>Tool-aware strategies</strong> (<code>SELECTIVE_TOOL_CALL</code>, <code>TOOL_RESULT_ONLY</code>) target the highest-volume content first.</li>
+<li><strong>Pipelines</strong> let you layer strategies from least to most aggressive.</li>
+</ol>
+<p>Next, see <a href="../25_hosting/25_hosting.qmd">25 — Hosting</a> to learn how to deploy agents as hosted services.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

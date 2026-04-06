@@ -41,6 +41,12 @@ Pkg.add("AgentFramework")
 - The Graph RAG vignettes also use RDFLib.jl, but RDFLib.jl is not required to load or test AgentFramework.jl itself.
 - AzureIdentity.jl is developed alongside this package and should be registered before the optional Azure extension is published.
 
+## Migration Guides
+
+If you are coming from Semantic Kernel or AutoGen, start with:
+
+- [15 — Migration Guides: Semantic Kernel and AutoGen](vignettes/15_migration_guides/15_migration_guides.qmd)
+
 ## License
 
 MIT License. Copyright (c) 2026 Simon Frost.

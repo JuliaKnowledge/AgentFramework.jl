@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.28">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+<meta name="author" content="Simon Frost">
+
+<title>Human-in-the-Loop Workflows</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="22_human_in_the_loop_files/libs/clipboard/clipboard.min.js"></script>
+<script src="22_human_in_the_loop_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="22_human_in_the_loop_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="22_human_in_the_loop_files/libs/quarto-html/popper.min.js"></script>
+<script src="22_human_in_the_loop_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="22_human_in_the_loop_files/libs/quarto-html/anchor.min.js"></script>
+<link href="22_human_in_the_loop_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="22_human_in_the_loop_files/libs/quarto-html/quarto-syntax-highlighting-49e51e44f424ea8c7044b429bdbbbfe2.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="22_human_in_the_loop_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="22_human_in_the_loop_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="22_human_in_the_loop_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#overview" id="toc-overview" class="nav-link active" data-scroll-target="#overview">Overview</a></li>
+  <li><a href="#prerequisites" id="toc-prerequisites" class="nav-link" data-scroll-target="#prerequisites">Prerequisites</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#how-request_info-works" id="toc-how-request_info-works" class="nav-link" data-scroll-target="#how-request_info-works">How <code>request_info</code> Works</a></li>
+  <li><a href="#basic-request_info-in-an-executor" id="toc-basic-request_info-in-an-executor" class="nav-link" data-scroll-target="#basic-request_info-in-an-executor">Basic <code>request_info</code> in an Executor</a></li>
+  <li><a href="#building-a-workflow-with-hitl" id="toc-building-a-workflow-with-hitl" class="nav-link" data-scroll-target="#building-a-workflow-with-hitl">Building a Workflow with HITL</a></li>
+  <li><a href="#running-the-workflow-with-human-interaction" id="toc-running-the-workflow-with-human-interaction" class="nav-link" data-scroll-target="#running-the-workflow-with-human-interaction">Running the Workflow with Human Interaction</a>
+  <ul class="collapse">
+  <li><a href="#step-1-initial-run" id="toc-step-1-initial-run" class="nav-link" data-scroll-target="#step-1-initial-run">Step 1: Initial Run</a></li>
+  <li><a href="#step-2-inspect-pending-requests" id="toc-step-2-inspect-pending-requests" class="nav-link" data-scroll-target="#step-2-inspect-pending-requests">Step 2: Inspect Pending Requests</a></li>
+  <li><a href="#step-3-resume-with-human-response" id="toc-step-3-resume-with-human-response" class="nav-link" data-scroll-target="#step-3-resume-with-human-response">Step 3: Resume with Human Response</a></li>
+  </ul></li>
+  <li><a href="#function-tool-approval-pattern" id="toc-function-tool-approval-pattern" class="nav-link" data-scroll-target="#function-tool-approval-pattern">Function Tool Approval Pattern</a></li>
+  <li><a href="#workflow-states-during-hitl" id="toc-workflow-states-during-hitl" class="nav-link" data-scroll-target="#workflow-states-during-hitl">Workflow States During HITL</a></li>
+  <li><a href="#full-example-multi-step-approval-pipeline" id="toc-full-example-multi-step-approval-pipeline" class="nav-link" data-scroll-target="#full-example-multi-step-approval-pipeline">Full Example: Multi-Step Approval Pipeline</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+<div class="quarto-alternate-formats"><h2>Other Formats</h2><ul><li><a href="22_human_in_the_loop.md"><i class="bi bi-file-code"></i>Github (GFM)</a></li><li><a href="22_human_in_the_loop.pdf"><i class="bi bi-file-pdf"></i>PDF</a></li></ul></div></nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Human-in-the-Loop Workflows</h1>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    <div>
+    <div class="quarto-title-meta-heading">Author</div>
+    <div class="quarto-title-meta-contents">
+             <p>Simon Frost </p>
+          </div>
+  </div>
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="overview" class="level2">
+<h2 class="anchored" data-anchor-id="overview">Overview</h2>
+<p>Some workflows need a human to approve, correct, or supply information before execution can continue. AgentFramework supports <strong>human-in-the-loop</strong> (HITL) patterns through the <code>request_info</code> mechanism: an executor pauses the workflow, emits a request event, and resumes only when a response arrives.</p>
+<p>By the end you will know how to:</p>
+<ol type="1">
+<li>Use <code>request_info</code> inside an executor to pause a workflow.</li>
+<li>Inspect <code>EVT_REQUEST_INFO</code> events to identify pending requests.</li>
+<li>Resume a paused workflow by supplying responses.</li>
+<li>Use the <code>FunctionApprovalRequest</code> content type for tool approval gates.</li>
+<li>Understand workflow state transitions during HITL interactions.</li>
+</ol>
+<pre><code>Executor runs ──► request_info(ctx, data) ──► Workflow pauses (IDLE)
+                                                     │
+                                              Human provides input
+                                                     │
+                                              resume with responses
+                                                     │
+                                              Executor continues</code></pre>
+</section>
+<section id="prerequisites" class="level2">
+<h2 class="anchored" data-anchor-id="prerequisites">Prerequisites</h2>
+<p>You need <a href="https://ollama.com">Ollama</a> running locally with the <code>qwen3:8b</code> model pulled:</p>
+<div class="code-copy-outer-scaffold"><div class="sourceCode" id="cb2"><pre class="sourceCode bash code-with-copy"><code class="sourceCode bash"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a><span class="ex">ollama</span> pull qwen3:8b</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</section>
+<section id="setup" class="level2">
+<h2 class="anchored" data-anchor-id="setup">Setup</h2>
+<div id="2" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">Pkg</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a><span class="bu">Pkg</span>.<span class="fu">activate</span>(<span class="fu">joinpath</span>(<span class="pp">@__DIR__</span>, <span class="st">".."</span>,<span class="st">".."</span>))</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a><span class="im">using</span> <span class="bu">AgentFramework</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="how-request_info-works" class="level2">
+<h2 class="anchored" data-anchor-id="how-request_info-works">How <code>request_info</code> Works</h2>
+<p>When an executor calls <code>request_info(ctx, data)</code>, the workflow engine:</p>
+<ol type="1">
+<li>Emits a <code>EVT_REQUEST_INFO</code> event containing the request data and a unique <code>request_id</code>.</li>
+<li>Transitions the workflow to the <strong><code>WF_IDLE</code></strong> state — execution stops.</li>
+<li>The caller inspects the result, finds pending requests, and collects human responses.</li>
+<li>The caller resumes the workflow by passing a <code>responses</code> dictionary mapping <code>request_id</code> values to response data.</li>
+</ol>
+<p>The executor picks up exactly where it left off, with the response available as the return value of <code>request_info</code>.</p>
+</section>
+<section id="basic-request_info-in-an-executor" class="level2">
+<h2 class="anchored" data-anchor-id="basic-request_info-in-an-executor">Basic <code>request_info</code> in an Executor</h2>
+<p>Here is an executor that drafts content, then pauses to request human review:</p>
+<div id="4" class="cell" data-execution_count="1">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="kw">function</span> <span class="fu">review_handler</span>(messages, ctx)</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>    draft <span class="op">=</span> <span class="fu">first</span>(messages)</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Pause workflow and request human feedback</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>    feedback <span class="op">=</span> <span class="fu">request_info</span>(ctx;</span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>        request_data <span class="op">=</span> <span class="fu">Dict</span>(</span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>            <span class="st">"prompt"</span> <span class="op">=&gt;</span> <span class="st">"Please review this draft: </span><span class="sc">$</span>(<span class="fu">first</span>(draft, <span class="fl">100</span>))<span class="st">..."</span>,</span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>            <span class="st">"type"</span> <span class="op">=&gt;</span> <span class="st">"review"</span>,</span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>        ),</span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>        response_type <span class="op">=</span> <span class="dt">String</span>,</span>
+<span id="cb4-11"><a href="#cb4-11" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb4-12"><a href="#cb4-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb4-13"><a href="#cb4-13" aria-hidden="true" tabindex="-1"></a>    <span class="co"># When resumed, feedback contains the human's response</span></span>
+<span id="cb4-14"><a href="#cb4-14" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> <span class="fu">lowercase</span>(<span class="fu">strip</span>(feedback)) <span class="op">==</span> <span class="st">"approve"</span></span>
+<span id="cb4-15"><a href="#cb4-15" aria-hidden="true" tabindex="-1"></a>        <span class="fu">yield_output</span>(ctx, draft)</span>
+<span id="cb4-16"><a href="#cb4-16" aria-hidden="true" tabindex="-1"></a>    <span class="cf">else</span></span>
+<span id="cb4-17"><a href="#cb4-17" aria-hidden="true" tabindex="-1"></a>        <span class="fu">yield_output</span>(ctx, <span class="st">"Revision needed: </span><span class="sc">$</span>feedback<span class="st">"</span>)</span>
+<span id="cb4-18"><a href="#cb4-18" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb4-19"><a href="#cb4-19" aria-hidden="true" tabindex="-1"></a><span class="kw">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="cell-output cell-output-display" data-execution_count="1">
+<pre><code>review_handler (generic function with 1 method)</code></pre>
+</div>
+</div>
+<p>The key points:</p>
+<ul>
+<li><strong><code>request_data</code></strong> — arbitrary data sent to the human (prompt, context, etc.).</li>
+<li><strong><code>response_type</code></strong> — the expected Julia type of the response.</li>
+<li><strong>Return value</strong> — after resume, <code>request_info</code> returns the human’s response.</li>
+</ul>
+</section>
+<section id="building-a-workflow-with-hitl" class="level2">
+<h2 class="anchored" data-anchor-id="building-a-workflow-with-hitl">Building a Workflow with HITL</h2>
+<p>We wire a writer agent into a review step that requires human approval:</p>
+<div id="6" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>writer_agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"Writer"</span>,</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"Write a short paragraph about the given topic."</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>writer_exec <span class="op">=</span> <span class="fu">agent_executor</span>(<span class="st">"writer"</span>, writer_agent, forward_response <span class="op">=</span> <span class="cn">true</span>)</span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>reviewer_exec <span class="op">=</span> <span class="fu">ExecutorSpec</span>(</span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>    id <span class="op">=</span> <span class="st">"reviewer"</span>,</span>
+<span id="cb6-13"><a href="#cb6-13" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Human review gate"</span>,</span>
+<span id="cb6-14"><a href="#cb6-14" aria-hidden="true" tabindex="-1"></a>    handler <span class="op">=</span> review_handler,</span>
+<span id="cb6-15"><a href="#cb6-15" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb6-16"><a href="#cb6-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb6-17"><a href="#cb6-17" aria-hidden="true" tabindex="-1"></a>workflow <span class="op">=</span> <span class="fu">WorkflowBuilder</span>(name <span class="op">=</span> <span class="st">"ReviewWorkflow"</span>, start <span class="op">=</span> writer_exec) <span class="op">|&gt;</span></span>
+<span id="cb6-18"><a href="#cb6-18" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_executor</span>(b, reviewer_exec) <span class="op">|&gt;</span></span>
+<span id="cb6-19"><a href="#cb6-19" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_edge</span>(b, <span class="st">"writer"</span>, <span class="st">"reviewer"</span>) <span class="op">|&gt;</span></span>
+<span id="cb6-20"><a href="#cb6-20" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_output</span>(b, <span class="st">"reviewer"</span>) <span class="op">|&gt;</span></span>
+<span id="cb6-21"><a href="#cb6-21" aria-hidden="true" tabindex="-1"></a>    build</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+</section>
+<section id="running-the-workflow-with-human-interaction" class="level2">
+<h2 class="anchored" data-anchor-id="running-the-workflow-with-human-interaction">Running the Workflow with Human Interaction</h2>
+<section id="step-1-initial-run" class="level3">
+<h3 class="anchored" data-anchor-id="step-1-initial-run">Step 1: Initial Run</h3>
+<p>The workflow runs until the reviewer executor calls <code>request_info</code>:</p>
+<div id="8" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> <span class="fu">run_workflow</span>(workflow, <span class="st">"Write about the Julia programming language"</span>)</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"State: "</span>, <span class="fu">get_final_state</span>(result))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>State: WF_IDLE</code></pre>
+</section>
+<section id="step-2-inspect-pending-requests" class="level3">
+<h3 class="anchored" data-anchor-id="step-2-inspect-pending-requests">Step 2: Inspect Pending Requests</h3>
+<p>Extract the <code>EVT_REQUEST_INFO</code> events:</p>
+<div id="10" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb9"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb9-1"><a href="#cb9-1" aria-hidden="true" tabindex="-1"></a>pending <span class="op">=</span> <span class="fu">get_request_info_events</span>(result)</span>
+<span id="cb9-2"><a href="#cb9-2" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Pending requests: "</span>, <span class="fu">length</span>(pending))</span>
+<span id="cb9-3"><a href="#cb9-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb9-4"><a href="#cb9-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> req <span class="kw">in</span> pending</span>
+<span id="cb9-5"><a href="#cb9-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  Request ID: "</span>, req.request_id)</span>
+<span id="cb9-6"><a href="#cb9-6" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  Data:       "</span>, req.data)</span>
+<span id="cb9-7"><a href="#cb9-7" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Pending requests: 1
+  Request ID: a1b2c3d4-...
+  Data:       Dict("prompt" =&gt; "Please review this draft: Julia is a high-...", "type" =&gt; "review")</code></pre>
+</section>
+<section id="step-3-resume-with-human-response" class="level3">
+<h3 class="anchored" data-anchor-id="step-3-resume-with-human-response">Step 3: Resume with Human Response</h3>
+<p>Supply the human’s feedback and resume:</p>
+<div id="12" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb11"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb11-1"><a href="#cb11-1" aria-hidden="true" tabindex="-1"></a>req_id <span class="op">=</span> pending[<span class="fl">1</span>].request_id</span>
+<span id="cb11-2"><a href="#cb11-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb11-3"><a href="#cb11-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Human approves the draft</span></span>
+<span id="cb11-4"><a href="#cb11-4" aria-hidden="true" tabindex="-1"></a>result2 <span class="op">=</span> <span class="fu">run_workflow</span>(workflow;</span>
+<span id="cb11-5"><a href="#cb11-5" aria-hidden="true" tabindex="-1"></a>    responses <span class="op">=</span> <span class="fu">Dict</span><span class="dt">{String,Any}</span>(req_id <span class="op">=&gt;</span> <span class="st">"approve"</span>),</span>
+<span id="cb11-6"><a href="#cb11-6" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb11-7"><a href="#cb11-7" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Final state: "</span>, <span class="fu">get_final_state</span>(result2))</span>
+<span id="cb11-8"><a href="#cb11-8" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Output:      "</span>, <span class="fu">first</span>(<span class="fu">get_outputs</span>(result2)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Final state: WF_IDLE
+Output:      Julia is a high-level, high-performance programming language...</code></pre>
+<p>If the human rejects instead:</p>
+<div id="14" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb13"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb13-1"><a href="#cb13-1" aria-hidden="true" tabindex="-1"></a>result3 <span class="op">=</span> <span class="fu">run_workflow</span>(workflow;</span>
+<span id="cb13-2"><a href="#cb13-2" aria-hidden="true" tabindex="-1"></a>    responses <span class="op">=</span> <span class="fu">Dict</span><span class="dt">{String,Any}</span>(req_id <span class="op">=&gt;</span> <span class="st">"Needs more detail on performance"</span>),</span>
+<span id="cb13-3"><a href="#cb13-3" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb13-4"><a href="#cb13-4" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"Output: "</span>, <span class="fu">first</span>(<span class="fu">get_outputs</span>(result3)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Output: Revision needed: Needs more detail on performance</code></pre>
+</section>
+</section>
+<section id="function-tool-approval-pattern" class="level2">
+<h2 class="anchored" data-anchor-id="function-tool-approval-pattern">Function Tool Approval Pattern</h2>
+<p>For sensitive tool calls, you can require human approval before execution using <code>FunctionApprovalRequest</code> content. This is useful when an agent wants to call a destructive or costly function.</p>
+<div id="16" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a><span class="co"># Define a tool that requires human approval</span></span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>sensitive_tool <span class="op">=</span> <span class="fu">FunctionTool</span>(</span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"delete_file"</span>,</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Delete a file from disk"</span>,</span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a>    handler <span class="op">=</span> (path) <span class="op">-&gt;</span> <span class="cf">begin</span></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>        <span class="fu">rm</span>(path)</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>        <span class="st">"Deleted </span><span class="sc">$</span>path<span class="st">"</span></span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span>,</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>    requires_approval <span class="op">=</span> <span class="cn">true</span>,</span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>agent <span class="op">=</span> <span class="fu">Agent</span>(</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>    name <span class="op">=</span> <span class="st">"FileManager"</span>,</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>    instructions <span class="op">=</span> <span class="st">"You manage files. Use delete_file to remove files when asked."</span>,</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>    client <span class="op">=</span> client,</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>    tools <span class="op">=</span> [sensitive_tool],</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p>When the agent attempts to call <code>delete_file</code>, the framework emits a <code>FunctionApprovalRequest</code> content item instead of executing the tool immediately:</p>
+<div id="18" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a>response <span class="op">=</span> <span class="fu">run_agent</span>(agent, <span class="st">"Please delete old_report.txt"</span>)</span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-3"><a href="#cb16-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Check for approval requests in the response</span></span>
+<span id="cb16-4"><a href="#cb16-4" aria-hidden="true" tabindex="-1"></a><span class="cf">for</span> content <span class="kw">in</span> response.contents</span>
+<span id="cb16-5"><a href="#cb16-5" aria-hidden="true" tabindex="-1"></a>    <span class="cf">if</span> content.<span class="kw">type</span> <span class="op">==</span> CONTENT_FUNCTION_APPROVAL_REQUEST</span>
+<span id="cb16-6"><a href="#cb16-6" aria-hidden="true" tabindex="-1"></a>        <span class="fu">println</span>(<span class="st">"Tool:      "</span>, content.function_call.name)</span>
+<span id="cb16-7"><a href="#cb16-7" aria-hidden="true" tabindex="-1"></a>        <span class="fu">println</span>(<span class="st">"Arguments: "</span>, content.function_call.arguments)</span>
+<span id="cb16-8"><a href="#cb16-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb16-9"><a href="#cb16-9" aria-hidden="true" tabindex="-1"></a>        <span class="co"># Approve or deny</span></span>
+<span id="cb16-10"><a href="#cb16-10" aria-hidden="true" tabindex="-1"></a>        approval <span class="op">=</span> <span class="fu">to_function_approval_response</span>(content, <span class="cn">true</span>)  <span class="co"># approved=true</span></span>
+<span id="cb16-11"><a href="#cb16-11" aria-hidden="true" tabindex="-1"></a>        resumed <span class="op">=</span> <span class="fu">run_agent</span>(agent, approval)</span>
+<span id="cb16-12"><a href="#cb16-12" aria-hidden="true" tabindex="-1"></a>        <span class="fu">println</span>(<span class="st">"Result:    "</span>, resumed.text)</span>
+<span id="cb16-13"><a href="#cb16-13" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span></span>
+<span id="cb16-14"><a href="#cb16-14" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>Tool:      delete_file
+Arguments: {"path": "old_report.txt"}
+Result:    Deleted old_report.txt</code></pre>
+</section>
+<section id="workflow-states-during-hitl" class="level2">
+<h2 class="anchored" data-anchor-id="workflow-states-during-hitl">Workflow States During HITL</h2>
+<p>A workflow progresses through these states during a human-in-the-loop interaction:</p>
+<pre><code>WF_STARTED ──► WF_IN_PROGRESS ──► WF_IDLE (waiting for human)
+                                       │
+                                  responses provided
+                                       │
+                                  WF_IN_PROGRESS (resumed)
+                                       │
+                                  WF_IDLE (completed)</code></pre>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>State</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>WF_STARTED</code></td>
+<td>Workflow has been initialized</td>
+</tr>
+<tr class="even">
+<td><code>WF_IN_PROGRESS</code></td>
+<td>Executors are actively running</td>
+</tr>
+<tr class="odd">
+<td><code>WF_IDLE</code></td>
+<td>Execution paused — check for pending requests</td>
+</tr>
+</tbody>
+</table>
+<p>When <code>WF_IDLE</code> is reached, use <code>get_request_info_events</code> to determine whether the workflow is truly finished (no pending requests) or waiting for human input (one or more pending requests).</p>
+</section>
+<section id="full-example-multi-step-approval-pipeline" class="level2">
+<h2 class="anchored" data-anchor-id="full-example-multi-step-approval-pipeline">Full Example: Multi-Step Approval Pipeline</h2>
+<p>This example chains a writer, a fact-checker, and a human approval gate:</p>
+<div id="20" class="cell" data-execution_count="0">
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb19"><pre class="sourceCode julia code-with-copy"><code class="sourceCode julia"><span id="cb19-1"><a href="#cb19-1" aria-hidden="true" tabindex="-1"></a>client <span class="op">=</span> <span class="fu">OllamaChatClient</span>(model <span class="op">=</span> <span class="st">"qwen3:8b"</span>)</span>
+<span id="cb19-2"><a href="#cb19-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-3"><a href="#cb19-3" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 1: Writer produces a draft</span></span>
+<span id="cb19-4"><a href="#cb19-4" aria-hidden="true" tabindex="-1"></a>writer <span class="op">=</span> <span class="fu">agent_executor</span>(<span class="st">"writer"</span>,</span>
+<span id="cb19-5"><a href="#cb19-5" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Agent</span>(</span>
+<span id="cb19-6"><a href="#cb19-6" aria-hidden="true" tabindex="-1"></a>        name <span class="op">=</span> <span class="st">"Writer"</span>,</span>
+<span id="cb19-7"><a href="#cb19-7" aria-hidden="true" tabindex="-1"></a>        instructions <span class="op">=</span> <span class="st">"Write a one-paragraph article about the topic."</span>,</span>
+<span id="cb19-8"><a href="#cb19-8" aria-hidden="true" tabindex="-1"></a>        client <span class="op">=</span> client,</span>
+<span id="cb19-9"><a href="#cb19-9" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb19-10"><a href="#cb19-10" aria-hidden="true" tabindex="-1"></a>    forward_response <span class="op">=</span> <span class="cn">true</span>,</span>
+<span id="cb19-11"><a href="#cb19-11" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb19-12"><a href="#cb19-12" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-13"><a href="#cb19-13" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 2: Fact-checker reviews the draft</span></span>
+<span id="cb19-14"><a href="#cb19-14" aria-hidden="true" tabindex="-1"></a>checker <span class="op">=</span> <span class="fu">agent_executor</span>(<span class="st">"checker"</span>,</span>
+<span id="cb19-15"><a href="#cb19-15" aria-hidden="true" tabindex="-1"></a>    <span class="fu">Agent</span>(</span>
+<span id="cb19-16"><a href="#cb19-16" aria-hidden="true" tabindex="-1"></a>        name <span class="op">=</span> <span class="st">"FactChecker"</span>,</span>
+<span id="cb19-17"><a href="#cb19-17" aria-hidden="true" tabindex="-1"></a>        instructions <span class="op">=</span> <span class="st">"Review the text for factual accuracy. Output PASS or list corrections needed."</span>,</span>
+<span id="cb19-18"><a href="#cb19-18" aria-hidden="true" tabindex="-1"></a>        client <span class="op">=</span> client,</span>
+<span id="cb19-19"><a href="#cb19-19" aria-hidden="true" tabindex="-1"></a>    ),</span>
+<span id="cb19-20"><a href="#cb19-20" aria-hidden="true" tabindex="-1"></a>    forward_response <span class="op">=</span> <span class="cn">true</span>,</span>
+<span id="cb19-21"><a href="#cb19-21" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb19-22"><a href="#cb19-22" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-23"><a href="#cb19-23" aria-hidden="true" tabindex="-1"></a><span class="co"># Step 3: Human approval gate</span></span>
+<span id="cb19-24"><a href="#cb19-24" aria-hidden="true" tabindex="-1"></a>approver <span class="op">=</span> <span class="fu">ExecutorSpec</span>(</span>
+<span id="cb19-25"><a href="#cb19-25" aria-hidden="true" tabindex="-1"></a>    id <span class="op">=</span> <span class="st">"approver"</span>,</span>
+<span id="cb19-26"><a href="#cb19-26" aria-hidden="true" tabindex="-1"></a>    description <span class="op">=</span> <span class="st">"Requests final human approval"</span>,</span>
+<span id="cb19-27"><a href="#cb19-27" aria-hidden="true" tabindex="-1"></a>    handler <span class="op">=</span> (msg, ctx) <span class="op">-&gt;</span> <span class="cf">begin</span></span>
+<span id="cb19-28"><a href="#cb19-28" aria-hidden="true" tabindex="-1"></a>        feedback <span class="op">=</span> <span class="fu">request_info</span>(ctx;</span>
+<span id="cb19-29"><a href="#cb19-29" aria-hidden="true" tabindex="-1"></a>            request_data <span class="op">=</span> <span class="fu">Dict</span>(</span>
+<span id="cb19-30"><a href="#cb19-30" aria-hidden="true" tabindex="-1"></a>                <span class="st">"prompt"</span> <span class="op">=&gt;</span> <span class="st">"Fact-check result: </span><span class="sc">$</span>(<span class="fu">first</span>(msg, <span class="fl">200</span>))<span class="sc">\n\n</span><span class="st">Approve for publication?"</span>,</span>
+<span id="cb19-31"><a href="#cb19-31" aria-hidden="true" tabindex="-1"></a>                <span class="st">"type"</span> <span class="op">=&gt;</span> <span class="st">"final_approval"</span>,</span>
+<span id="cb19-32"><a href="#cb19-32" aria-hidden="true" tabindex="-1"></a>            ),</span>
+<span id="cb19-33"><a href="#cb19-33" aria-hidden="true" tabindex="-1"></a>            response_type <span class="op">=</span> <span class="dt">String</span>,</span>
+<span id="cb19-34"><a href="#cb19-34" aria-hidden="true" tabindex="-1"></a>        )</span>
+<span id="cb19-35"><a href="#cb19-35" aria-hidden="true" tabindex="-1"></a>        <span class="cf">if</span> <span class="fu">lowercase</span>(<span class="fu">strip</span>(feedback)) <span class="op">==</span> <span class="st">"approve"</span></span>
+<span id="cb19-36"><a href="#cb19-36" aria-hidden="true" tabindex="-1"></a>            <span class="fu">yield_output</span>(ctx, <span class="st">"✅ Published: </span><span class="sc">$</span>msg<span class="st">"</span>)</span>
+<span id="cb19-37"><a href="#cb19-37" aria-hidden="true" tabindex="-1"></a>        <span class="cf">else</span></span>
+<span id="cb19-38"><a href="#cb19-38" aria-hidden="true" tabindex="-1"></a>            <span class="fu">yield_output</span>(ctx, <span class="st">"❌ Rejected: </span><span class="sc">$</span>feedback<span class="st">"</span>)</span>
+<span id="cb19-39"><a href="#cb19-39" aria-hidden="true" tabindex="-1"></a>        <span class="cf">end</span></span>
+<span id="cb19-40"><a href="#cb19-40" aria-hidden="true" tabindex="-1"></a>    <span class="cf">end</span>,</span>
+<span id="cb19-41"><a href="#cb19-41" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb19-42"><a href="#cb19-42" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-43"><a href="#cb19-43" aria-hidden="true" tabindex="-1"></a>pipeline <span class="op">=</span> <span class="fu">WorkflowBuilder</span>(name <span class="op">=</span> <span class="st">"PublishPipeline"</span>, start <span class="op">=</span> writer) <span class="op">|&gt;</span></span>
+<span id="cb19-44"><a href="#cb19-44" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_executor</span>(b, checker) <span class="op">|&gt;</span></span>
+<span id="cb19-45"><a href="#cb19-45" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_executor</span>(b, approver) <span class="op">|&gt;</span></span>
+<span id="cb19-46"><a href="#cb19-46" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_edge</span>(b, <span class="st">"writer"</span>, <span class="st">"checker"</span>) <span class="op">|&gt;</span></span>
+<span id="cb19-47"><a href="#cb19-47" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_edge</span>(b, <span class="st">"checker"</span>, <span class="st">"approver"</span>) <span class="op">|&gt;</span></span>
+<span id="cb19-48"><a href="#cb19-48" aria-hidden="true" tabindex="-1"></a>    b <span class="op">-&gt;</span> <span class="fu">add_output</span>(b, <span class="st">"approver"</span>) <span class="op">|&gt;</span></span>
+<span id="cb19-49"><a href="#cb19-49" aria-hidden="true" tabindex="-1"></a>    build</span>
+<span id="cb19-50"><a href="#cb19-50" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-51"><a href="#cb19-51" aria-hidden="true" tabindex="-1"></a><span class="co"># Run until human input is needed</span></span>
+<span id="cb19-52"><a href="#cb19-52" aria-hidden="true" tabindex="-1"></a>result <span class="op">=</span> <span class="fu">run_workflow</span>(pipeline, <span class="st">"The history of the Julia programming language"</span>)</span>
+<span id="cb19-53"><a href="#cb19-53" aria-hidden="true" tabindex="-1"></a><span class="fu">println</span>(<span class="st">"State: "</span>, <span class="fu">get_final_state</span>(result))</span>
+<span id="cb19-54"><a href="#cb19-54" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-55"><a href="#cb19-55" aria-hidden="true" tabindex="-1"></a><span class="co"># Inspect and respond</span></span>
+<span id="cb19-56"><a href="#cb19-56" aria-hidden="true" tabindex="-1"></a>pending <span class="op">=</span> <span class="fu">get_request_info_events</span>(result)</span>
+<span id="cb19-57"><a href="#cb19-57" aria-hidden="true" tabindex="-1"></a><span class="cf">if</span> !<span class="fu">isempty</span>(pending)</span>
+<span id="cb19-58"><a href="#cb19-58" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"Approval requested:"</span>)</span>
+<span id="cb19-59"><a href="#cb19-59" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="st">"  "</span>, pending[<span class="fl">1</span>].data[<span class="st">"prompt"</span>])</span>
+<span id="cb19-60"><a href="#cb19-60" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb19-61"><a href="#cb19-61" aria-hidden="true" tabindex="-1"></a>    <span class="co"># Human approves</span></span>
+<span id="cb19-62"><a href="#cb19-62" aria-hidden="true" tabindex="-1"></a>    final <span class="op">=</span> <span class="fu">run_workflow</span>(pipeline;</span>
+<span id="cb19-63"><a href="#cb19-63" aria-hidden="true" tabindex="-1"></a>        responses <span class="op">=</span> <span class="fu">Dict</span><span class="dt">{String,Any}</span>(pending[<span class="fl">1</span>].request_id <span class="op">=&gt;</span> <span class="st">"approve"</span>),</span>
+<span id="cb19-64"><a href="#cb19-64" aria-hidden="true" tabindex="-1"></a>    )</span>
+<span id="cb19-65"><a href="#cb19-65" aria-hidden="true" tabindex="-1"></a>    <span class="fu">println</span>(<span class="fu">first</span>(<span class="fu">get_outputs</span>(final)))</span>
+<span id="cb19-66"><a href="#cb19-66" aria-hidden="true" tabindex="-1"></a><span class="cf">end</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</div>
+<p><strong>Expected output:</strong></p>
+<pre><code>State: WF_IDLE
+Approval requested:
+  Fact-check result: PASS — the article is factually accurate...
+  Approve for publication?
+✅ Published: PASS — the article is factually accurate...</code></pre>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 40%">
+<col style="width: 59%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Concept</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><code>request_info(ctx; ...)</code></td>
+<td>Pause an executor and emit a request event</td>
+</tr>
+<tr class="even">
+<td><code>EVT_REQUEST_INFO</code></td>
+<td>Event type for pending human-input requests</td>
+</tr>
+<tr class="odd">
+<td><code>get_request_info_events(result)</code></td>
+<td>Extract all pending request events</td>
+</tr>
+<tr class="even">
+<td><code>run_workflow(wf; responses=...)</code></td>
+<td>Resume a paused workflow with responses</td>
+</tr>
+<tr class="odd">
+<td><code>WF_IDLE</code></td>
+<td>Workflow state when paused or completed</td>
+</tr>
+<tr class="even">
+<td><code>FunctionApprovalRequest</code></td>
+<td>Content type for tool-call approval gates</td>
+</tr>
+<tr class="odd">
+<td><code>to_function_approval_response</code></td>
+<td>Convert an approval request to a response</td>
+</tr>
+<tr class="even">
+<td><code>requires_approval</code></td>
+<td>FunctionTool option to gate execution</td>
+</tr>
+</tbody>
+</table>
+<p>Key takeaways:</p>
+<ol type="1">
+<li><strong><code>request_info</code></strong> is the core primitive — it pauses the workflow and emits an event that external systems (or humans) can respond to.</li>
+<li><strong>Resume is explicit</strong> — the caller must collect responses and pass them back via the <code>responses</code> keyword argument.</li>
+<li><strong>Function approval</strong> provides a built-in pattern for gating sensitive tool calls behind human review.</li>
+<li><strong>Workflow state</strong> distinguishes between “idle and done” vs “idle and waiting for input” via pending request events.</li>
+</ol>
+<p>Next, see <a href="../23_skills/23_skills.qmd">23 — Skills</a> to learn how to package reusable agent capabilities as composable skill modules.</p>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

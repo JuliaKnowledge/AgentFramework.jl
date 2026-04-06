@@ -89,26 +89,10 @@ end
 """
     _db_execute(conn, sql, params=())
 
-Execute a SQL statement via DBInterface.execute. The actual DBInterface module
-must be loaded by the caller; we call it through the connection's module.
+Execute a SQL statement via DBInterface.execute.
 """
 function _db_execute(conn, sql::String, params=())
-    # Use the generic DBInterface.execute call pattern.
-    # The conn object knows its own module via dispatch.
-    mod = parentmodule(typeof(conn))
-    dbi = nothing
-    # Walk up module hierarchy to find DBInterface
-    for name in names(mod; all=true)
-        if name === :execute
-            # Found execute in the connection's module
-            return Base.invokelatest(getfield(mod, :execute), conn, sql, params)
-        end
-    end
-    # Fallback: try DBInterface from Main if loaded
-    if isdefined(Main, :DBInterface)
-        return Base.invokelatest(Main.DBInterface.execute, conn, sql, params)
-    end
-    error("DBInterface not found. Please `using DBInterface` before using DBInterfaceHistoryProvider.")
+    return DBInterface.execute(conn, sql, params)
 end
 
 """

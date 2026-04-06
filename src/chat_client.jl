@@ -97,6 +97,7 @@ Base.@kwdef mutable struct ChatResponseUpdate
     model_id::Union{Nothing, String} = nothing
     usage_details::Union{Nothing, UsageDetails} = nothing
     response_id::Union{Nothing, String} = nothing
+    conversation_id::Union{Nothing, String} = nothing
     raw_representation::Any = nothing
 end
 
@@ -107,6 +108,15 @@ Extract text from a streaming update.
 """
 function get_text(update::ChatResponseUpdate)::String
     join((get_text(c) for c in update.contents if is_text(c)), "")
+end
+
+function Base.getproperty(update::ChatResponseUpdate, name::Symbol)
+    name === :text && return get_text(update)
+    return getfield(update, name)
+end
+
+function Base.propertynames(::ChatResponseUpdate, private::Bool=false)
+    return (:role, :contents, :finish_reason, :model_id, :usage_details, :response_id, :conversation_id, :raw_representation, :text)
 end
 
 """
@@ -170,6 +180,7 @@ function ChatResponse(updates::Vector{ChatResponseUpdate})
     model_id = nothing
     usage = nothing
     response_id = nothing
+    conversation_id = nothing
 
     for update in updates
         if update.role !== nothing
@@ -200,6 +211,9 @@ function ChatResponse(updates::Vector{ChatResponseUpdate})
         if update.response_id !== nothing
             response_id = update.response_id
         end
+        if update.conversation_id !== nothing
+            conversation_id = update.conversation_id
+        end
     end
 
     if has_tool_calls(tool_accumulator)
@@ -216,6 +230,7 @@ function ChatResponse(updates::Vector{ChatResponseUpdate})
         model_id = model_id,
         usage_details = usage,
         response_id = response_id,
+        conversation_id = conversation_id,
     )
 end
 
@@ -367,15 +382,25 @@ Response from an agent's `run_agent()` call.
 
 # Fields
 - `messages::Vector{Message}`: Response messages.
+- `response_id::Union{Nothing, String}`: Provider response identifier.
+- `conversation_id::Union{Nothing, String}`: Provider-managed conversation/session identifier.
 - `finish_reason::Union{Nothing, FinishReason}`: Completion reason.
 - `usage_details::Union{Nothing, UsageDetails}`: Aggregated token usage.
 - `model_id::Union{Nothing, String}`: Model used.
+- `additional_properties::Dict{String, Any}`: Provider-specific metadata.
+- `continuation_token`: Optional provider continuation token for long-running operations.
+- `raw_representation`: Raw provider response payload.
 """
 Base.@kwdef mutable struct AgentResponse
     messages::Vector{Message} = Message[]
+    response_id::Union{Nothing, String} = nothing
+    conversation_id::Union{Nothing, String} = nothing
     finish_reason::Union{Nothing, FinishReason} = nothing
     usage_details::Union{Nothing, UsageDetails} = nothing
     model_id::Union{Nothing, String} = nothing
+    additional_properties::Dict{String, Any} = Dict{String, Any}()
+    continuation_token::Any = nothing
+    raw_representation::Any = nothing
 end
 
 """
@@ -391,7 +416,18 @@ function Base.getproperty(r::AgentResponse, name::Symbol)
 end
 
 function Base.propertynames(::AgentResponse, private::Bool=false)
-    return (:messages, :finish_reason, :usage_details, :model_id, :text)
+    return (
+        :messages,
+        :response_id,
+        :conversation_id,
+        :finish_reason,
+        :usage_details,
+        :model_id,
+        :additional_properties,
+        :continuation_token,
+        :raw_representation,
+        :text,
+    )
 end
 
 """
@@ -405,10 +441,34 @@ Base.@kwdef mutable struct AgentResponseUpdate
     finish_reason::Union{Nothing, FinishReason} = nothing
     model_id::Union{Nothing, String} = nothing
     usage_details::Union{Nothing, UsageDetails} = nothing
+    response_id::Union{Nothing, String} = nothing
+    conversation_id::Union{Nothing, String} = nothing
+    continuation_token::Any = nothing
+    raw_representation::Any = nothing
 end
 
 function get_text(update::AgentResponseUpdate)::String
     join((get_text(c) for c in update.contents if is_text(c)), "")
+end
+
+function Base.getproperty(update::AgentResponseUpdate, name::Symbol)
+    name === :text && return get_text(update)
+    return getfield(update, name)
+end
+
+function Base.propertynames(::AgentResponseUpdate, private::Bool=false)
+    return (
+        :role,
+        :contents,
+        :finish_reason,
+        :model_id,
+        :usage_details,
+        :response_id,
+        :conversation_id,
+        :continuation_token,
+        :raw_representation,
+        :text,
+    )
 end
 
 # ── Abstract Chat Client Interface ───────────────────────────────────────────

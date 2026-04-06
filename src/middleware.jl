@@ -68,6 +68,35 @@ Base.@kwdef mutable struct FunctionInvocationContext
     result::Any = nothing
 end
 
+# ── Middleware Termination ───────────────────────────────────────────────────
+
+"""
+    MiddlewareTermination <: Exception
+
+Thrown by a middleware to short-circuit the pipeline and return a result
+immediately without invoking any remaining middleware or the handler.
+
+# Fields
+- `result::Any`: The value to return from the pipeline.
+- `message::String`: Optional human-readable reason.
+"""
+struct MiddlewareTermination <: Exception
+    result::Any
+    message::String
+    MiddlewareTermination(result; message::String="") = new(result, message)
+end
+
+Base.showerror(io::IO, e::MiddlewareTermination) =
+    print(io, "MiddlewareTermination: ", isempty(e.message) ? "(no message)" : e.message)
+
+"""
+    terminate_pipeline(result; message="")
+
+Convenience function to throw a [`MiddlewareTermination`](@ref) that short-circuits
+the middleware pipeline with the given result.
+"""
+terminate_pipeline(result; message::String="") = throw(MiddlewareTermination(result; message))
+
 # ── Middleware Function Types ────────────────────────────────────────────────
 
 """
@@ -119,7 +148,12 @@ function apply_agent_middleware(middlewares::Vector, ctx::AgentContext, handler:
     end
 
     chain = build_chain(1)
-    return chain(ctx)
+    try
+        return chain(ctx)
+    catch e
+        e isa MiddlewareTermination && return e.result
+        rethrow()
+    end
 end
 
 """
@@ -144,7 +178,12 @@ function apply_chat_middleware(middlewares::Vector, ctx::ChatContext, handler::F
     end
 
     chain = build_chain(1)
-    return chain(ctx)
+    try
+        return chain(ctx)
+    catch e
+        e isa MiddlewareTermination && return e.result
+        rethrow()
+    end
 end
 
 """
@@ -169,5 +208,10 @@ function apply_function_middleware(middlewares::Vector, ctx::FunctionInvocationC
     end
 
     chain = build_chain(1)
-    return chain(ctx)
+    try
+        return chain(ctx)
+    catch e
+        e isa MiddlewareTermination && return e.result
+        rethrow()
+    end
 end

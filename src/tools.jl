@@ -36,34 +36,73 @@ t = FunctionTool(
 )
 ```
 """
-Base.@kwdef struct FunctionTool <: AbstractTool
+Base.@kwdef mutable struct FunctionTool <: AbstractTool
     name::String
     description::String
-    func::Function
+    func::Union{Nothing, Function} = nothing
     parameters::Dict{String, Any} = Dict{String, Any}("type" => "object", "properties" => Dict{String, Any}())
     strict::Bool = false
+    approval_mode::Symbol = :never_require  # :always_require or :never_require
+    max_invocations::Union{Nothing, Int} = nothing
+    max_invocation_exceptions::Union{Nothing, Int} = nothing
+    invocation_count::Int = 0
+    invocation_exception_count::Int = 0
+    result_parser::Union{Nothing, Function} = nothing  # (raw_result) -> String
+    kind::Union{Nothing, String} = nothing
+    additional_properties::Dict{String, Any} = Dict{String, Any}()
 end
 
+"""Whether this tool is declaration-only (no implementation to execute)."""
+is_declaration_only(t::FunctionTool) = t.func === nothing
+
 function Base.show(io::IO, t::FunctionTool)
-    print(io, "FunctionTool(\"", t.name, "\")")
+    suffix = is_declaration_only(t) ? " [declaration]" : ""
+    print(io, "FunctionTool(\"", t.name, "\"", suffix, ")")
 end
 
 """
     invoke_tool(tool::FunctionTool, arguments::Dict{String, Any}) -> Any
 
 Invoke a tool with parsed arguments. Arguments are matched to function parameters by name.
+Tracks invocation count and enforces max_invocations / max_invocation_exceptions limits.
 """
 function invoke_tool(tool::FunctionTool, arguments::Dict{String, Any})
-    m = first(methods(tool.func))
-    param_names = Base.method_argnames(m)[2:end]  # skip the function itself
-    args = Any[]
-    for pname in param_names
-        key = String(pname)
-        if haskey(arguments, key)
-            push!(args, arguments[key])
-        end
+    is_declaration_only(tool) && throw(ToolExecutionError(
+        "Cannot invoke declaration-only tool '$(tool.name)': no implementation provided."))
+
+    if tool.max_invocations !== nothing && tool.invocation_count >= tool.max_invocations
+        throw(ToolExecutionError(
+            "Tool '$(tool.name)' exceeded max_invocations limit ($(tool.max_invocations))."))
     end
-    return tool.func(args...)
+
+    tool.invocation_count += 1
+
+    raw_result = try
+        m = first(methods(tool.func))
+        param_names = Base.method_argnames(m)[2:end]
+        args = Any[]
+        for pname in param_names
+            key = String(pname)
+            if haskey(arguments, key)
+                push!(args, arguments[key])
+            end
+        end
+        tool.func(args...)
+    catch e
+        tool.invocation_exception_count += 1
+        if tool.max_invocation_exceptions !== nothing &&
+           tool.invocation_exception_count >= tool.max_invocation_exceptions
+            throw(ToolExecutionError(
+                "Tool '$(tool.name)' exceeded max_invocation_exceptions limit ($(tool.max_invocation_exceptions))."))
+        end
+        rethrow(e)
+    end
+
+    # Apply result_parser if provided
+    if tool.result_parser !== nothing
+        return tool.result_parser(raw_result)
+    end
+    return raw_result
 end
 
 """
@@ -74,6 +113,32 @@ Invoke a tool with JSON-encoded arguments.
 function invoke_tool(tool::FunctionTool, arguments_json::AbstractString)
     args = JSON3.read(arguments_json, Dict{String, Any})
     return invoke_tool(tool, args)
+end
+
+"""
+    parse_result(value) -> String
+
+Convert a raw tool return value to a string suitable for the LLM.
+Handles strings, dicts, vectors, Content objects, and arbitrary types.
+"""
+function parse_result(value)::String
+    value isa AbstractString && return String(value)
+    value isa Content && return get_text(value)
+    value isa AbstractDict && return JSON3.write(value)
+    value isa AbstractVector && return JSON3.write(value)
+    value === nothing && return ""
+    return string(value)
+end
+
+"""
+    reset_invocation_count!(tool::FunctionTool)
+
+Reset invocation and exception counters to zero.
+"""
+function reset_invocation_count!(tool::FunctionTool)
+    tool.invocation_count = 0
+    tool.invocation_exception_count = 0
+    return tool
 end
 
 """

@@ -1,0 +1,375 @@
+---
+title: "Message Compaction"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    mainfont: "STIX Two Text"
+    monofont: "Fira Code"
+    mathfont: "STIX Two Math"
+    toc: true
+engine: julia
+---
+
+## Overview
+
+LLMs have finite context windows. As conversations grow — especially those
+involving tool calls with verbose results — the message history can exceed
+the model's token limit, causing failures or degraded performance. **Message
+compaction** selectively reduces the history while preserving the information
+that matters most.
+
+In this vignette you will learn how to:
+
+1. Estimate token counts for text, messages, and conversations.
+2. Configure compaction with `CompactionConfig`.
+3. Choose among seven built-in `CompactionStrategy` options.
+4. Check whether compaction is needed with `needs_compaction`.
+5. Apply compaction with `compact_messages`.
+6. Chain strategies using `CompactionPipeline`.
+
+## Prerequisites
+
+No external services are required — compaction is a purely local operation
+on message lists.
+
+::: {.callout-note}
+The `SUMMARIZE_OLDEST` strategy produces a simple text summary by default.
+For LLM-powered summarization you would pass the summary text through a chat
+client at the agent level.
+:::
+
+## Setup
+
+```{julia}
+#| output: false
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## The Problem: Context Window Limits
+
+Consider a multi-turn agent that uses tools. Each turn adds user messages,
+assistant replies, tool calls, and tool results. After 30–50 turns the
+history can easily reach 50 000+ tokens — well beyond a 4 096 or 8 192
+token window.
+
+```{julia}
+#| eval: false
+# Build a long conversation
+messages = Message[]
+push!(messages, Message(role=:system, contents=[text_content("You are a helpful assistant.")]))
+
+for i in 1:50
+    push!(messages, Message(role=:user, contents=[text_content("Question $i: " * repeat("x", 200))]))
+    push!(messages, Message(role=:assistant, contents=[text_content("Answer $i: " * repeat("y", 300))]))
+end
+
+total = estimate_messages_tokens(messages)
+println("Total estimated tokens: $total")   # well over 4096
+```
+
+Without compaction, the agent must either truncate blindly or fail. The
+compaction module gives you fine-grained control over *what* to keep and
+*what* to discard.
+
+## Token Estimation
+
+AgentFramework provides a character-based heuristic for token counting.
+The default ratio of 4.0 characters per token is a reasonable approximation
+for English text with GPT-style tokenizers.
+
+```{julia}
+#| eval: false
+# Estimate tokens for a string
+text = "Hello, how are you today?"
+tokens = estimate_tokens(text)   # ~7 (ceil(25 / 4.0))
+println("Text tokens: $tokens")
+
+# Estimate tokens for a single message (includes role overhead)
+msg = Message(ROLE_USER, [text_content(text)])
+msg_tokens = estimate_message_tokens(msg)
+println("Message tokens: $msg_tokens")
+
+# Estimate tokens for an entire conversation
+messages = [
+    msg,
+    Message(ROLE_ASSISTANT, [text_content("I'm fine, thanks!")])
+]
+total = estimate_messages_tokens(messages)
+println("Conversation tokens: $total")
+```
+
+The functions accept a `chars_per_token` keyword to adjust the ratio for
+different models or languages:
+
+```{julia}
+#| eval: false
+# Tighter estimate for a model with a smaller vocabulary
+tokens_tight = estimate_tokens(text; chars_per_token=3.5)
+println("Tight estimate: $tokens_tight")
+```
+
+## CompactionConfig
+
+All compaction behaviour is controlled through a `CompactionConfig`:
+
+```{julia}
+#| eval: false
+config = CompactionConfig(
+    strategy = SLIDING_WINDOW,   # which compaction strategy to apply
+    max_tokens = 4096,           # token budget for the message history
+    keep_system = true,          # always preserve system/developer messages
+    keep_recent = 4,             # always keep the last N non-system messages
+    chars_per_token = 4.0,       # character-to-token ratio for estimation
+)
+```
+
+The `summary_prompt` field is used only by `SUMMARIZE_OLDEST` and defaults to
+a reasonable instruction for conversation summarization.
+
+## Compaction Strategies
+
+AgentFramework provides seven strategies via the `CompactionStrategy` enum.
+Each makes different trade-offs between context preservation and budget
+compliance.
+
+### 1. `NO_COMPACTION` — Never Compact
+
+The default. Messages are returned unchanged regardless of length. Use this
+when you manage context externally or when the model has a very large window.
+
+```{julia}
+#| eval: false
+config_none = CompactionConfig(strategy=NO_COMPACTION, max_tokens=4096)
+result = compact_messages(messages, config_none)
+println(length(result) == length(messages))  # true — no change
+```
+
+### 2. `SLIDING_WINDOW` — Keep Recent Messages
+
+Keeps system messages plus as many recent non-system messages as fit within
+the token budget. The most common strategy for general chat.
+
+```{julia}
+#| eval: false
+config_window = CompactionConfig(
+    strategy = SLIDING_WINDOW,
+    max_tokens = 2048,
+    keep_system = true,
+)
+compacted = compact_messages(messages, config_window)
+println("Kept $(length(compacted)) of $(length(messages)) messages")
+```
+
+### 3. `DROP_OLDEST` — Drop From the Front
+
+Keeps system messages and the last `keep_recent` messages unconditionally,
+then adds back older messages from newest to oldest as long as they fit the
+budget.
+
+```{julia}
+#| eval: false
+config_drop = CompactionConfig(
+    strategy = DROP_OLDEST,
+    max_tokens = 2048,
+    keep_system = true,
+    keep_recent = 6,
+)
+compacted = compact_messages(messages, config_drop)
+println("Kept $(length(compacted)) of $(length(messages)) messages")
+```
+
+### 4. `TRUNCATE` — Hard Truncation
+
+Like `SLIDING_WINDOW`, but can split *within* the oldest kept message by
+truncating its text content. Use when you need strict budget compliance.
+
+```{julia}
+#| eval: false
+config_trunc = CompactionConfig(
+    strategy = TRUNCATE,
+    max_tokens = 2048,
+    keep_system = true,
+)
+compacted = compact_messages(messages, config_trunc)
+println("Kept $(length(compacted)) messages (oldest may be truncated)")
+```
+
+### 5. `SUMMARIZE_OLDEST` — Replace Old Messages With a Summary
+
+Splits the history into old and recent segments. The old messages are replaced
+with a single system message containing a text summary. This preserves
+context better than dropping, at the cost of some fidelity.
+
+```{julia}
+#| eval: false
+config_summary = CompactionConfig(
+    strategy = SUMMARIZE_OLDEST,
+    max_tokens = 2048,
+    keep_recent = 6,
+)
+compacted = compact_messages(messages, config_summary)
+# First non-system message is the summary
+println(compacted[2].contents[1].text)  # "[Conversation summary: ...]"
+```
+
+::: {.callout-note}
+The built-in summarization concatenates old messages into a bracketed summary.
+For higher-quality summaries, pipe the summary text through an LLM at the
+agent middleware level.
+:::
+
+### 6. `SELECTIVE_TOOL_CALL` — Drop Tool Call Pairs
+
+Identifies complete tool-call / tool-result pairs and removes the oldest
+ones first. Conversational messages (user/assistant text) are never removed.
+Ideal for tool-heavy agents where tool history is less important than
+dialogue.
+
+```{julia}
+#| eval: false
+# Build a conversation with tool calls
+tool_messages = Message[
+    Message(role=:system, contents=[text_content("You are a calculator agent.")]),
+    Message(role=:user, contents=[text_content("What is 2+2?")]),
+    Message(role=:assistant, contents=[function_call_content("call_1", "add", "{\"a\":2,\"b\":2}")]),
+    Message(role=:tool, contents=[function_result_content("call_1", "4")]),
+    Message(role=:assistant, contents=[text_content("2+2 = 4")]),
+    Message(role=:user, contents=[text_content("And 10*3?")]),
+    Message(role=:assistant, contents=[function_call_content("call_2", "multiply", "{\"a\":10,\"b\":3}")]),
+    Message(role=:tool, contents=[function_result_content("call_2", "30")]),
+    Message(role=:assistant, contents=[text_content("10*3 = 30")]),
+]
+
+config_tools = CompactionConfig(
+    strategy = SELECTIVE_TOOL_CALL,
+    max_tokens = 100,    # very tight budget to force removal
+    keep_recent = 4,
+)
+compacted = compact_messages(tool_messages, config_tools)
+println("Kept $(length(compacted)) of $(length(tool_messages)) messages")
+```
+
+### 7. `TOOL_RESULT_ONLY` — Replace Tool Results With Placeholders
+
+Keeps tool *calls* visible (so the model knows it used a tool) but replaces
+verbose tool *results* with `"[Tool result truncated]"`. Only results outside
+the last `keep_recent` messages are replaced.
+
+```{julia}
+#| eval: false
+config_results = CompactionConfig(
+    strategy = TOOL_RESULT_ONLY,
+    max_tokens = 200,
+    keep_recent = 4,
+)
+compacted = compact_messages(tool_messages, config_results)
+# Older tool results now show the placeholder
+for msg in compacted
+    for c in msg.contents
+        if c.type == FUNCTION_RESULT
+            println("Result: ", c.result)
+        end
+    end
+end
+```
+
+## Checking Whether Compaction Is Needed
+
+Use `needs_compaction` to avoid unnecessary work:
+
+```{julia}
+#| eval: false
+config = CompactionConfig(strategy=SLIDING_WINDOW, max_tokens=4096)
+
+if needs_compaction(messages, config)
+    compacted = compact_messages(messages, config)
+    println("Compacted $(length(messages)) → $(length(compacted)) messages")
+else
+    compacted = messages
+    println("No compaction needed")
+end
+```
+
+`needs_compaction` returns `false` when the strategy is `NO_COMPACTION` or
+when the estimated token count is within budget.
+
+## CompactionPipeline — Chaining Strategies
+
+A single strategy may not be enough. `CompactionPipeline` applies multiple
+strategies in sequence — each operating on the output of the previous one.
+This lets you build layered compaction logic:
+
+```{julia}
+#| eval: false
+pipeline = CompactionPipeline(strategies=[
+    # First pass: remove old tool call pairs
+    CompactionConfig(strategy=SELECTIVE_TOOL_CALL, max_tokens=8192),
+    # Second pass: replace remaining tool results with placeholders
+    CompactionConfig(strategy=TOOL_RESULT_ONLY, max_tokens=4096),
+    # Final pass: sliding window to enforce hard budget
+    CompactionConfig(strategy=SLIDING_WINDOW, max_tokens=2048, keep_recent=4),
+])
+
+compacted = compact_messages(messages, pipeline)
+println("Pipeline reduced to $(length(compacted)) messages")
+```
+
+The pipeline pattern matches the Python `TokenBudgetComposedStrategy` and
+C# `PipelineCompactionStrategy` — a sequence of progressively more aggressive
+compaction steps.
+
+## Strategy Comparison
+
+| Strategy | Preserves Context | Speed | Best For |
+|----------|------------------|-------|----------|
+| `NO_COMPACTION` | All | — | Large context models |
+| `SLIDING_WINDOW` | Recent only | Fast | General chat |
+| `DROP_OLDEST` | Recent + system | Fast | Simple bots |
+| `TRUNCATE` | Recent only | Fastest | Strict token budgets |
+| `SUMMARIZE_OLDEST` | High (via summary) | Moderate | Important history |
+| `SELECTIVE_TOOL_CALL` | Conversation | Fast | Tool-heavy agents |
+| `TOOL_RESULT_ONLY` | Calls visible | Fast | Debug-friendly |
+
+**Guidelines:**
+
+- Start with `SLIDING_WINDOW` for most applications.
+- Use `SELECTIVE_TOOL_CALL` or `TOOL_RESULT_ONLY` for agents that make many
+  tool calls.
+- Use `SUMMARIZE_OLDEST` when conversation history contains important context
+  that should not be lost entirely.
+- Use `CompactionPipeline` when a single strategy is not enough — combine
+  tool-focused and window-based approaches.
+
+## Summary
+
+| Type / Function | Purpose |
+|----------------|---------|
+| `CompactionStrategy` | Enum: `NO_COMPACTION`, `SLIDING_WINDOW`, `DROP_OLDEST`, `TRUNCATE`, `SUMMARIZE_OLDEST`, `SELECTIVE_TOOL_CALL`, `TOOL_RESULT_ONLY` |
+| `CompactionConfig` | Configuration struct with `strategy`, `max_tokens`, `keep_system`, `keep_recent`, `chars_per_token` |
+| `CompactionPipeline` | Chain multiple `CompactionConfig` stages in sequence |
+| `estimate_tokens(text)` | Heuristic token count for a string |
+| `estimate_message_tokens(msg)` | Token count for a single `Message` |
+| `estimate_messages_tokens(msgs)` | Token count for a conversation |
+| `needs_compaction(msgs, config)` | Check if history exceeds the token budget |
+| `compact_messages(msgs, config)` | Apply a strategy and return compacted messages |
+| `compact_messages(msgs, pipeline)` | Apply a pipeline of strategies in sequence |
+
+Key takeaways:
+
+1. **Token estimation is heuristic** — the `chars_per_token` ratio (default
+   4.0) gives a fast approximation without requiring a real tokenizer.
+2. **System messages are protected** by default — set `keep_system=true` to
+   ensure instructions are never dropped.
+3. **Tool-aware strategies** (`SELECTIVE_TOOL_CALL`, `TOOL_RESULT_ONLY`)
+   target the highest-volume content first.
+4. **Pipelines** let you layer strategies from least to most aggressive.
+
+Next, see [25 — Hosting](../25_hosting/25_hosting.qmd) to learn how to
+deploy agents as hosted services.

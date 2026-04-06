@@ -31,6 +31,45 @@ function AgentFramework.get_response_streaming(client::MockChatClient, messages:
     return ch
 end
 
+mutable struct MetadataTrackingChatClient <: AbstractChatClient
+    responses::Vector{ChatResponse}
+    streaming_updates::Vector{Vector{ChatResponseUpdate}}
+    seen_messages::Vector{Vector{Message}}
+    seen_options::Vector{ChatOptions}
+    call_count::Int
+end
+
+function MetadataTrackingChatClient(response::ChatResponse)
+    MetadataTrackingChatClient([response], Vector{Vector{ChatResponseUpdate}}(), Vector{Vector{Message}}(), ChatOptions[], 0)
+end
+
+function MetadataTrackingChatClient(streaming_updates::Vector{ChatResponseUpdate})
+    MetadataTrackingChatClient(ChatResponse[], [streaming_updates], Vector{Vector{Message}}(), ChatOptions[], 0)
+end
+
+function AgentFramework.get_response(client::MetadataTrackingChatClient, messages::Vector{Message}, options::ChatOptions)::ChatResponse
+    client.call_count += 1
+    push!(client.seen_messages, copy(messages))
+    push!(client.seen_options, options)
+    idx = min(client.call_count, length(client.responses))
+    return client.responses[idx]
+end
+
+function AgentFramework.get_response_streaming(client::MetadataTrackingChatClient, messages::Vector{Message}, options::ChatOptions)::Channel{ChatResponseUpdate}
+    client.call_count += 1
+    push!(client.seen_messages, copy(messages))
+    push!(client.seen_options, options)
+    idx = min(client.call_count, length(client.streaming_updates))
+    ch = Channel{ChatResponseUpdate}(max(length(client.streaming_updates[idx]), 1))
+    Threads.@spawn begin
+        for update in client.streaming_updates[idx]
+            put!(ch, update)
+        end
+        close(ch)
+    end
+    return ch
+end
+
 Base.@kwdef mutable struct TrackingProvider <: BaseContextProvider
     source_id::String
     events::Vector{String}
@@ -236,6 +275,28 @@ end
         @test response.text == "Continuing..."
     end
 
+    @testset "run_agent injects session metadata and syncs conversation ids" begin
+        client = MetadataTrackingChatClient(ChatResponse(
+            messages = [Message(:assistant, "Continuing...")],
+            response_id = "resp-1",
+            conversation_id = "thread-123",
+            finish_reason = STOP,
+        ))
+        agent = Agent(client = client)
+        session = AgentSession(id = "test-session", thread_id = "existing-thread")
+
+        response = run_agent(agent, "Continue"; session = session)
+        seen_options = only(client.seen_options)
+
+        @test response.conversation_id == "thread-123"
+        @test session.thread_id == "thread-123"
+        @test seen_options.additional["_agentframework_session_id"] == "test-session"
+        @test seen_options.additional["_agentframework_thread_id"] == "existing-thread"
+        @test length(seen_options.additional["_agentframework_input_messages"]) == 1
+        @test only(seen_options.additional["_agentframework_input_messages"]).role == :user
+        @test get_text(only(seen_options.additional["_agentframework_input_messages"])) == "Continue"
+    end
+
     @testset "run_agent with context provider" begin
         client = MockChatClient(ChatResponse(
             messages = [Message(:assistant, "Got context")],
@@ -290,6 +351,31 @@ end
         end
         @test !isempty(collected_text)
         @test join(collected_text) == "Streamed response"
+    end
+
+    @testset "run_agent_streaming syncs conversation ids" begin
+        client = MetadataTrackingChatClient([
+            ChatResponseUpdate(role = :assistant, contents = [text_content("Streamed ")]),
+            ChatResponseUpdate(role = :assistant, contents = [text_content("response")]),
+            ChatResponseUpdate(finish_reason = STOP, conversation_id = "stream-thread-1"),
+        ])
+        agent = Agent(client = client)
+        session = AgentSession(id = "stream-session", thread_id = "existing-stream-thread")
+
+        stream = run_agent_streaming(agent, "Hello"; session = session)
+        for _ in stream
+        end
+        response = get_final_response(stream)
+        seen_options = only(client.seen_options)
+
+        @test response.text == "Streamed response"
+        @test response.conversation_id == "stream-thread-1"
+        @test session.thread_id == "stream-thread-1"
+        @test seen_options.additional["_agentframework_session_id"] == "stream-session"
+        @test seen_options.additional["_agentframework_thread_id"] == "existing-stream-thread"
+        @test length(seen_options.additional["_agentframework_input_messages"]) == 1
+        @test only(seen_options.additional["_agentframework_input_messages"]).role == :user
+        @test get_text(only(seen_options.additional["_agentframework_input_messages"])) == "Hello"
     end
 
     @testset "run_agent_streaming uses middleware and provider finalization" begin

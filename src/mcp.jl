@@ -136,9 +136,25 @@ function _next_id!(client::AbstractMCPClient)
     end
 end
 
-"""Normalize MCP tool names to valid identifier-like names."""
-function _normalize_tool_name(name::String)::String
-    replace(name, r"[^a-zA-Z0-9_]" => "_")
+"""Normalize MCP tool/prompt names to valid identifier-like pattern [A-Za-z0-9_.-]."""
+function _normalize_mcp_name(name::String)::String
+    replace(name, r"[^A-Za-z0-9_.\-]" => "-")
+end
+
+"""Build prefixed MCP tool name from a normalized name and optional prefix."""
+function _build_prefixed_mcp_name(normalized_name::String, prefix::Union{Nothing, String})::String
+    prefix === nothing && return normalized_name
+    norm_prefix = rstrip(_normalize_mcp_name(prefix), ['_', '.', '-'])
+    isempty(norm_prefix) && return normalized_name
+    trimmed = lstrip(normalized_name, ['_', '.', '-'])
+    isempty(trimmed) && return norm_prefix
+    return "$(norm_prefix)_$(trimmed)"
+end
+
+"""Per-tool approval specification for MCP tools."""
+Base.@kwdef struct MCPSpecificApproval
+    always_require_approval::Union{Nothing, Vector{String}} = nothing
+    never_require_approval::Union{Nothing, Vector{String}} = nothing
 end
 
 # ─── Stdio Transport ────────────────────────────────────────────────────────
@@ -413,39 +429,87 @@ end
 
 # ─── MCP → FunctionTool Conversion ──────────────────────────────────────────
 
-"""Convert an MCPToolInfo to an AgentFramework FunctionTool."""
-function mcp_tool_to_function_tool(client::AbstractMCPClient, tool::MCPToolInfo)::FunctionTool
+"""
+    mcp_tool_to_function_tool(client, tool; tool_name_prefix=nothing) -> FunctionTool
+
+Convert an MCPToolInfo to an AgentFramework FunctionTool.
+
+Supports structuredContent fallback: if tool result has no text content,
+falls back to structuredContent field. Tool names are normalized and
+optionally prefixed for deduplication.
+"""
+function mcp_tool_to_function_tool(client::AbstractMCPClient, tool::MCPToolInfo;
+                                    tool_name_prefix::Union{Nothing, String}=nothing)::FunctionTool
+    original_name = tool.name
+    normalized = _normalize_mcp_name(tool.name)
+    exposed_name = _build_prefixed_mcp_name(normalized, tool_name_prefix)
+
     invoke_fn = (args::Dict{String, Any}) -> begin
-        result = call_tool(client, tool.name, args)
+        result = call_tool(client, original_name, args)
         if result.is_error
             content_texts = [get(c, "text", "") for c in result.content if get(c, "type", "") == "text"]
             error_msg = isempty(content_texts) ? "MCP tool error" : join(content_texts, "\n")
             throw(ToolExecutionError(error_msg))
         end
+        # Try text content first
         texts = [get(c, "text", "") for c in result.content if get(c, "type", "") == "text"]
-        return isempty(texts) ? JSON3.write(result.content) : join(texts, "\n")
+        if !isempty(texts)
+            return join(texts, "\n")
+        end
+        # Fallback to structuredContent if present
+        for c in result.content
+            sc = get(c, "structuredContent", nothing)
+            if sc !== nothing
+                return sc isa AbstractString ? sc : JSON3.write(sc)
+            end
+        end
+        # Last resort: serialize all content
+        return JSON3.write(result.content)
+    end
+
+    metadata = Dict{String, Any}()
+    if exposed_name != original_name
+        metadata["_mcp_original_name"] = original_name
+        metadata["_mcp_normalized_name"] = normalized
+    end
+    if tool_name_prefix !== nothing
+        metadata["_mcp_tool_name_prefix"] = tool_name_prefix
     end
 
     FunctionTool(
-        name = _normalize_tool_name(tool.name),
+        name = exposed_name,
         description = tool.description,
         func = invoke_fn,
         parameters = tool.input_schema,
     )
 end
 
-"""Convert MCP tools to AgentFramework FunctionTool objects."""
-function mcp_tools_to_function_tools(client::AbstractMCPClient, tools::Vector{MCPToolInfo})::Vector{FunctionTool}
-    [mcp_tool_to_function_tool(client, tool) for tool in tools]
+"""Convert MCP tools to AgentFramework FunctionTool objects, with optional name prefixing."""
+function mcp_tools_to_function_tools(client::AbstractMCPClient, tools::Vector{MCPToolInfo};
+                                      tool_name_prefix::Union{Nothing, String}=nothing)::Vector{FunctionTool}
+    seen_names = Set{String}()
+    result = FunctionTool[]
+    for tool in tools
+        ft = mcp_tool_to_function_tool(client, tool; tool_name_prefix=tool_name_prefix)
+        # Deduplicate: skip tools with names we've already seen
+        if ft.name ∉ seen_names
+            push!(seen_names, ft.name)
+            push!(result, ft)
+        else
+            @warn "Skipping duplicate MCP tool" name=ft.name original=tool.name
+        end
+    end
+    return result
 end
 
 """Connect to MCP server and return all tools as FunctionTools."""
-function load_mcp_tools(client::AbstractMCPClient)::Vector{FunctionTool}
+function load_mcp_tools(client::AbstractMCPClient;
+                         tool_name_prefix::Union{Nothing, String}=nothing)::Vector{FunctionTool}
     if !is_connected(client)
         connect!(client)
     end
     tools = list_tools(client)
-    return mcp_tools_to_function_tools(client, tools)
+    return mcp_tools_to_function_tools(client, tools; tool_name_prefix=tool_name_prefix)
 end
 
 # ─── Convenience ─────────────────────────────────────────────────────────────

@@ -1,0 +1,328 @@
+---
+title: "Mem0 Persistent Memory"
+author: "Simon Frost"
+format:
+  html:
+    code-fold: false
+    toc: true
+  gfm:
+    toc: true
+  pdf:
+    mainfont: "STIX Two Text"
+    monofont: "Fira Code"
+    mathfont: "STIX Two Math"
+    toc: true
+engine: julia
+---
+
+## Overview
+
+Agents built with AgentFramework.jl are stateless by default — each call to
+`run_agent` starts fresh. In-process providers such as `InMemoryHistoryProvider`
+(see [07 — Memory](../07_memory/07_memory.qmd)) persist within a single Julia
+session but lose everything on restart. For truly long-lived memory that spans
+sessions, processes, and even machines, you need an external semantic memory
+store.
+
+[Mem0](https://mem0.ai) is a semantic memory layer that **learns** from
+conversations and **injects** relevant context into future interactions. Instead
+of replaying raw chat history, Mem0 extracts facts, preferences, and knowledge,
+then retrieves only the memories that are relevant to the current query.
+
+By the end of this vignette you will know how to:
+
+1. Connect to Mem0 via the **platform** (cloud) or **OSS** (self-hosted) deployment.
+2. Use `Mem0ContextProvider` for automatic memory search and storage.
+3. Scope memories by user, agent, or application.
+4. Control what gets stored and how memories are retrieved.
+
+## Prerequisites
+
+You need [Ollama](https://ollama.com) running locally with the `qwen3:8b` model
+pulled:
+
+```bash
+ollama pull qwen3:8b
+```
+
+You also need access to Mem0 — either a [Mem0 Platform](https://app.mem0.ai)
+API key or a local Mem0 OSS instance running on `http://localhost:8000`.
+
+## Setup
+
+```{julia}
+#| output: false
+using Pkg
+Pkg.activate(joinpath(@__DIR__, "..",".."))
+using AgentFramework
+```
+
+## What Is Mem0?
+
+Traditional conversation history replays every message verbatim. This works
+for short exchanges but becomes noisy and token-expensive as conversations grow.
+
+Mem0 takes a different approach:
+
+| Feature | Raw History | Mem0 |
+|---------|-------------|------|
+| Storage | Exact messages | Extracted facts and preferences |
+| Retrieval | All messages in order | Semantic search — only relevant memories |
+| Persistence | In-process or file | External service (cloud or self-hosted) |
+| Cross-session | Same session only | Shared across all sessions for a user |
+
+When an agent uses Mem0, the flow looks like this:
+
+```
+User sends message
+    │
+    ▼
+before_run!() — Search Mem0 for relevant memories → inject into context
+    │
+    ▼
+Agent generates response (with memory context)
+    │
+    ▼
+after_run!() — Store conversation messages to Mem0
+```
+
+Mem0 automatically extracts structured facts from the raw conversation (e.g.
+"The user's name is Alice" or "The user prefers Julia over Python") and
+stores them for future retrieval.
+
+## Mem0 Platform vs OSS
+
+AgentFramework.jl supports two deployment modes via the `Mem0Client`:
+
+```{julia}
+#| eval: false
+# Cloud platform — requires an API key from https://app.mem0.ai
+platform_client = Mem0Client(
+    api_key = "your-mem0-api-key",
+    deployment = MEM0_PLATFORM,
+)
+
+# Local OSS deployment — no API key required by default
+oss_client = Mem0Client(
+    base_url = "http://localhost:8000",
+    deployment = MEM0_OSS,
+)
+```
+
+| Setting | Platform | OSS |
+|---------|----------|-----|
+| `deployment` | `MEM0_PLATFORM` (default) | `MEM0_OSS` |
+| `base_url` | `https://api.mem0.ai` | `http://localhost:8000` |
+| Authentication | `api_key` required | Optional |
+| Environment variable | `MEM0_API_KEY` | `MEM0_API_KEY` (optional) |
+
+## Mem0ContextProvider — Automatic Memory Injection
+
+The simplest way to add Mem0 to an agent is through `Mem0ContextProvider`. It
+automatically searches for relevant memories before each agent run and stores
+new memories afterward:
+
+```{julia}
+#| eval: false
+provider = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    user_id = "user-123",
+    top_k = 5,
+)
+
+agent = Agent(
+    name = "MemoryAgent",
+    instructions = "You remember what users tell you across conversations.",
+    client = OllamaChatClient(model = "qwen3:8b"),
+    context_providers = [provider],
+)
+```
+
+Under the hood, the provider implements two hooks:
+
+- **`before_run!`** — takes the user's input, searches Mem0 for related
+  memories, and injects them as context messages.
+- **`after_run!`** — collects the conversation messages (filtered by role) and
+  sends them to Mem0 for extraction and storage.
+
+## Full Conversation with Memory
+
+Here is a complete example showing how memories persist across sessions:
+
+```{julia}
+#| eval: false
+client = OllamaChatClient(model = "qwen3:8b")
+
+provider = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    user_id = "user-123",
+    top_k = 5,
+)
+
+agent = Agent(
+    name = "MemoryAgent",
+    instructions = "You remember what users tell you across conversations. Keep answers brief.",
+    client = client,
+    context_providers = [provider],
+)
+
+# First conversation — agent learns about the user
+session1 = create_session(agent)
+response = run_agent(agent, "My name is Alice and I love Julia programming."; session = session1)
+println("Turn 1: ", response.text)
+```
+
+**Expected output:**
+
+```
+Turn 1: Nice to meet you, Alice! Julia is a great choice for scientific computing.
+```
+
+Now start a brand new session. The in-process state is gone, but Mem0 remembers:
+
+```{julia}
+#| eval: false
+# New session — no shared in-process state with session1
+session2 = create_session(agent)
+response = run_agent(agent, "What do you know about me?"; session = session2)
+println("Turn 2: ", response.text)
+```
+
+**Expected output:**
+
+```
+Turn 2: You're Alice, and you love Julia programming!
+```
+
+The provider searched Mem0 for memories matching "What do you know about me?",
+found the stored fact about Alice and Julia, and injected it into the context
+before the LLM generated its response.
+
+## Controlling What Gets Stored
+
+By default, `Mem0ContextProvider` stores messages from all three roles: user,
+assistant, and system. You can customize this:
+
+```{julia}
+#| eval: false
+provider = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    user_id = "user-123",
+    store_roles = [ROLE_USER, ROLE_ASSISTANT],  # Exclude system messages
+    top_k = 10,                                  # Retrieve more memories
+    context_prompt = "## User Memories\nRelevant context from previous conversations:",
+)
+```
+
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `store_roles` | `[ROLE_USER, ROLE_ASSISTANT, ROLE_SYSTEM]` | Which message roles to send to Mem0 |
+| `top_k` | `5` | Number of memories to retrieve per search |
+| `rerank` | `nothing` | Enable Mem0 reranking for better relevance |
+| `context_prompt` | `"## Memories\nConsider the following..."` | Text prepended to retrieved memories |
+| `source_id` | `"mem0"` | Identifier for this provider instance |
+
+## Agent and Application Scoping
+
+Memories can be scoped to different dimensions. At least one of `user_id`,
+`agent_id`, or `application_id` must be provided:
+
+```{julia}
+#| eval: false
+# Scope memories to a specific agent
+agent_scoped = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    agent_id = "weather-bot",
+    user_id = "user-123",
+)
+
+# Scope memories to an application
+app_scoped = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    application_id = "my-app",
+    user_id = "user-123",
+)
+```
+
+This is useful when multiple agents serve the same user but should maintain
+separate memory spaces:
+
+```{julia}
+#| eval: false
+# Personal assistant memories are isolated from work assistant memories
+personal_provider = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    agent_id = "personal-assistant",
+    user_id = "user-123",
+)
+
+work_provider = Mem0ContextProvider(
+    api_key = "your-mem0-api-key",
+    agent_id = "work-assistant",
+    user_id = "user-123",
+)
+
+personal_agent = Agent(
+    name = "PersonalAssistant",
+    instructions = "You help with personal tasks and remember preferences.",
+    client = client,
+    context_providers = [personal_provider],
+)
+
+work_agent = Agent(
+    name = "WorkAssistant",
+    instructions = "You help with professional tasks and remember work context.",
+    client = client,
+    context_providers = [work_provider],
+)
+```
+
+## Using with a Pre-configured Client
+
+If you need to share a single `Mem0Client` across multiple providers, or want
+more control over the connection settings, create the client separately:
+
+```{julia}
+#| eval: false
+# Create a shared client
+mem0 = Mem0Client(
+    api_key = "your-mem0-api-key",
+    deployment = MEM0_PLATFORM,
+)
+
+# Reuse across providers with different scopes
+provider_a = Mem0ContextProvider(client = mem0, user_id = "alice")
+provider_b = Mem0ContextProvider(client = mem0, user_id = "bob")
+```
+
+## Using with Mem0.jl (Local Julia Library)
+
+For fully local memory with no external API, the companion `Mem0.jl` package
+provides an in-process memory system with embeddings, vector stores, and graph
+storage. You can integrate it by writing a custom context provider that calls
+`Mem0.jl` directly in its `before_run!`/`after_run!` hooks — see
+[07 — Memory](../07_memory/07_memory.qmd) for the custom provider pattern.
+
+## Summary
+
+| Concept | Type / Constant | Purpose |
+|---------|-----------------|---------|
+| Mem0 client | `Mem0Client` | HTTP client for Mem0 API |
+| Context provider | `Mem0ContextProvider` | Automatic memory search and storage |
+| Platform deployment | `MEM0_PLATFORM` | Cloud Mem0 at `api.mem0.ai` |
+| OSS deployment | `MEM0_OSS` | Self-hosted Mem0 |
+| Memory scoping | `user_id`, `agent_id`, `application_id` | Isolate memories by dimension |
+
+Key takeaways:
+
+1. **Mem0 provides semantic memory** — it extracts facts from conversations and
+   retrieves only what is relevant, unlike raw history replay.
+2. **`Mem0ContextProvider` handles everything automatically** — search before
+   the run, store after the run.
+3. **Scope memories** by user, agent, or application to keep different contexts
+   isolated.
+4. **Works with both cloud and self-hosted** Mem0 deployments via the
+   `deployment` parameter.
+
+Next, see [22 — Human in the Loop](../22_human_in_the_loop/22_human_in_the_loop.qmd)
+to learn how to add human approval steps to agent workflows.

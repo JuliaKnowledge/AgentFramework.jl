@@ -347,3 +347,83 @@ function all_turn_messages(tracker::TurnTracker)::Vector{Message}
         return msgs
     end
 end
+
+# ── Per-Service-Call Chat History Persistence ─────────────────────────────────
+
+"""Sentinel conversation ID for framework-managed local history."""
+const LOCAL_HISTORY_CONVERSATION_ID = "agent_framework_local_history_persistence"
+
+"""Check if a conversation_id is the local history persistence sentinel."""
+is_local_history_conversation_id(id::Union{Nothing, String}) =
+    id === LOCAL_HISTORY_CONVERSATION_ID
+
+"""
+    PerServiceCallHistoryMiddleware
+
+Chat middleware that persists conversation history after each LLM service call,
+rather than only at the end of the full agent run. This matches the AI service's
+behavior and enables recovery from mid-loop interruptions.
+
+When `require_per_service_call_history_persistence` is set on agent settings,
+this middleware is automatically injected.
+
+# Fields
+- `providers`: History providers to persist through.
+- `session`: The current agent session.
+"""
+Base.@kwdef mutable struct PerServiceCallHistoryMiddleware
+    providers::Vector{Any}  # BaseHistoryProvider instances
+    session::AgentSession
+end
+
+"""
+Process a chat context through per-service-call history persistence.
+
+1. Before the service call: load history from providers
+2. Strip the local sentinel conversation ID before calling the leaf client
+3. After the service call: persist messages through history providers
+"""
+function (mw::PerServiceCallHistoryMiddleware)(ctx, call_next::Function)
+    # Load history from providers before the call
+    for provider in mw.providers
+        if applicable(get_messages, provider, mw.session.id)
+            history = get_messages(provider, mw.session.id)
+            if !isempty(history)
+                prepend!(ctx.messages, history)
+            end
+        end
+    end
+
+    # Strip sentinel conversation ID so the leaf client doesn't see it
+    if hasproperty(ctx, :options) && ctx.options !== nothing &&
+       hasproperty(ctx.options, :conversation_id) &&
+       is_local_history_conversation_id(ctx.options.conversation_id)
+        ctx.options.conversation_id = nothing
+    end
+
+    # Execute the actual LLM call
+    call_next()
+
+    # Persist messages after the service call
+    if ctx.result !== nothing && hasproperty(ctx.result, :messages)
+        to_save = collect(Message, ctx.result.messages)
+        if !isempty(to_save)
+            for provider in mw.providers
+                if applicable(save_messages!, provider, mw.session.id, to_save)
+                    save_messages!(provider, mw.session.id, to_save)
+                end
+            end
+        end
+    end
+end
+
+"""
+    with_per_service_call_history(agent, session, providers) -> middleware
+
+Create a per-service-call history persistence middleware configured for
+the given agent session and history providers.
+"""
+function with_per_service_call_history(session::AgentSession,
+                                       providers::Vector)
+    PerServiceCallHistoryMiddleware(providers=collect(Any, providers), session=session)
+end

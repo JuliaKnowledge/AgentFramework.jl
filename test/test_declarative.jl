@@ -1,6 +1,68 @@
 using AgentFramework
 using Test
 
+mutable struct DeclarativeMockChatClient <: AbstractChatClient
+    responses::Vector{String}
+    call_count::Int
+end
+
+DeclarativeMockChatClient(responses::Vector{String}) = DeclarativeMockChatClient(responses, 0)
+DeclarativeMockChatClient(response::String) = DeclarativeMockChatClient([response])
+
+function AgentFramework.get_response(client::DeclarativeMockChatClient, messages::Vector{Message}, options::ChatOptions)::ChatResponse
+    client.call_count += 1
+    index = min(client.call_count, length(client.responses))
+    return ChatResponse(
+        messages = [Message(:assistant, client.responses[index])],
+        finish_reason = STOP,
+        model_id = "declarative-mock",
+    )
+end
+
+function AgentFramework.get_response_streaming(client::DeclarativeMockChatClient, messages::Vector{Message}, options::ChatOptions)::Channel{ChatResponseUpdate}
+    response = AgentFramework.get_response(client, messages, options)
+    channel = Channel{ChatResponseUpdate}(1)
+    Threads.@spawn begin
+        for message in response.messages
+            for content in message.contents
+                put!(channel, ChatResponseUpdate(role = message.role, contents = [content]))
+            end
+        end
+        put!(channel, ChatResponseUpdate(finish_reason = response.finish_reason))
+        close(channel)
+    end
+    return channel
+end
+
+Base.@kwdef mutable struct DeclarativeTrackingProvider <: BaseContextProvider
+    source_id::String
+    events::Vector{String} = String[]
+end
+
+function AgentFramework.before_run!(provider::DeclarativeTrackingProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
+    push!(provider.events, "before:" * provider.source_id)
+    state["count"] = get(state, "count", 0) + 1
+end
+
+function AgentFramework.after_run!(provider::DeclarativeTrackingProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
+    push!(provider.events, "after:" * provider.source_id * ":" * string(get(state, "count", 0)))
+end
+
+declarative_echo_name(name::String) = name
+
+declarative_echo_tool = FunctionTool(
+    name = "decl_echo",
+    description = "Echo a provided name.",
+    func = declarative_echo_name,
+    parameters = Dict{String, Any}(
+        "type" => "object",
+        "properties" => Dict{String, Any}(
+            "name" => Dict{String, Any}("type" => "string"),
+        ),
+        "required" => ["name"],
+    ),
+)
+
 @testset "Declarative Workflows" begin
 
     # ── 1. workflow_from_dict basic definition ────────────────────────────────
@@ -264,7 +326,10 @@ using Test
         @test AgentFramework._parse_type_name("Float64") == Float64
         @test AgentFramework._parse_type_name("Bool") == Bool
         @test AgentFramework._parse_type_name("Dict") == Dict{String, Any}
+        @test AgentFramework._parse_type_name("Dict{String, String}") == Dict{String, String}
         @test AgentFramework._parse_type_name("Vector") == Vector{Any}
+        @test AgentFramework._parse_type_name("Vector{String}") == Vector{String}
+        @test AgentFramework._parse_type_name("Vector{Message}") == Vector{Message}
         @test AgentFramework._parse_type_name("Message") == Message
         @test AgentFramework._parse_type_name("UnknownType") == Any
     end
@@ -318,4 +383,258 @@ using Test
         @test wf.max_iterations == 100
     end
 
+    @testset "workflow_from_yaml supports YAML definitions" begin
+        yaml = """
+        kind: Workflow
+        name: YamlWorkflow
+        start: step1
+        outputs: result
+        executors:
+          step1:
+            description: First step
+            input_types: String
+            output_types: String
+          result:
+            description: Final step
+            input_types:
+              - String
+            output_types:
+              - String
+        edges:
+          - kind: direct
+            source: step1
+            target: result
+        """
+
+        workflow = workflow_from_yaml(yaml; allow_missing_handlers = true)
+        @test workflow.name == "YamlWorkflow"
+        @test workflow.start_executor_id == "step1"
+        @test workflow.output_executor_ids == ["result"]
+        @test length(workflow.executors) == 2
+        @test workflow.executors["step1"].input_types == DataType[String]
+    end
+
+    @testset "workflow_from_dict supports switch edges" begin
+        empty!(AgentFramework._HANDLER_REGISTRY)
+
+        is_integer = value -> value isa Integer
+        register_handler!("is_integer", is_integer)
+
+        definition = Dict{String, Any}(
+            "start" => "router",
+            "executors" => [
+                Dict{String, Any}("id" => "router"),
+                Dict{String, Any}("id" => "numbers"),
+                Dict{String, Any}("id" => "fallback"),
+            ],
+            "edges" => [
+                Dict{String, Any}(
+                    "kind" => "switch",
+                    "source" => "router",
+                    "cases" => [
+                        Dict{String, Any}("condition" => "is_integer", "target" => "numbers"),
+                    ],
+                    "default" => "fallback",
+                ),
+            ],
+        )
+
+        workflow = workflow_from_dict(definition; allow_missing_handlers = true)
+        @test length(workflow.edge_groups) == 2
+        @test Set(only(target_executor_ids(group)) for group in workflow.edge_groups) == Set(["numbers", "fallback"])
+
+        empty!(AgentFramework._HANDLER_REGISTRY)
+    end
+
+    @testset "YAML workflow file roundtrip" begin
+        empty!(AgentFramework._HANDLER_REGISTRY)
+        handler = (msg, ctx) -> send_message(ctx, msg)
+        register_handler!("echo", handler)
+        definition = Dict{String, Any}(
+            "name" => "YamlFileTest",
+            "start" => "a",
+            "outputs" => ["a"],
+            "executors" => [
+                Dict{String, Any}("id" => "a", "handler" => "echo"),
+            ],
+        )
+
+        workflow = workflow_from_dict(definition)
+        tmpfile = tempname() * ".yaml"
+        try
+            workflow_to_file(workflow, tmpfile)
+            @test isfile(tmpfile)
+            raw = read(tmpfile, String)
+            @test occursin("kind: \"Workflow\"", raw)
+
+            roundtripped = workflow_from_file(tmpfile)
+            @test roundtripped.name == "YamlFileTest"
+            @test roundtripped.start_executor_id == "a"
+        finally
+            isfile(tmpfile) && rm(tmpfile)
+            empty!(AgentFramework._HANDLER_REGISTRY)
+        end
+    end
+
+end
+
+@testset "Declarative Agents" begin
+    @testset "tool/client/context registries" begin
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+
+        client = DeclarativeMockChatClient("registry hello")
+        provider = DeclarativeTrackingProvider(source_id = "registry")
+
+        register_tool!("decl_echo", declarative_echo_tool)
+        register_client!("decl_client", client)
+        register_context_provider!("decl_provider", provider)
+
+        @test get_tool("decl_echo") === declarative_echo_tool
+        @test get_client("decl_client") === client
+        @test get_context_provider("decl_provider") === provider
+
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+    end
+
+    @testset "agent_from_yaml resolves registered refs" begin
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+
+        client = DeclarativeMockChatClient("registered hello")
+        provider = DeclarativeTrackingProvider(source_id = "tracking")
+        register_tool!("decl_echo", declarative_echo_tool)
+        register_client!("local-client", client)
+        register_context_provider!("tracking", provider)
+
+        yaml = """
+        kind: Prompt
+        name: RegisteredAgent
+        instructions: Be concise.
+        client: local-client
+        tools:
+          - decl_echo
+        contextProviders:
+          - tracking
+        options:
+          temperature: 0.1
+          custom_seed: 7
+        """
+
+        agent = agent_from_yaml(yaml)
+        response = run_agent(agent, "hello")
+
+        @test agent.client === client
+        @test agent.tools == [declarative_echo_tool]
+        @test agent.context_providers == Any[provider]
+        @test agent.options.temperature == 0.1
+        @test agent.options.additional["custom_seed"] == 7
+        @test response.text == "registered hello"
+        @test provider.events == ["before:tracking", "after:tracking:1"]
+
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+    end
+
+    @testset "agent_from_yaml supports inline model definitions" begin
+        yaml = """
+        kind: Prompt
+        name: InlineAgent
+        instructions: Use local inference.
+        model:
+          provider: ollama
+          id: qwen3:8b
+          baseUrl: http://localhost:11434
+        options:
+          temperature: 0.2
+          stop:
+            - DONE
+          seed: 11
+        """
+
+        agent = agent_from_yaml(yaml)
+        @test agent.client isa OllamaChatClient
+        @test agent.client.model == "qwen3:8b"
+        @test agent.client.base_url == "http://localhost:11434"
+        @test agent.options.temperature == 0.2
+        @test agent.options.stop == ["DONE"]
+        @test agent.options.additional["seed"] == 11
+    end
+
+    @testset "agent YAML roundtrip" begin
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+
+        client = DeclarativeMockChatClient("roundtrip")
+        provider = DeclarativeTrackingProvider(source_id = "roundtrip")
+        register_tool!("decl_echo", declarative_echo_tool)
+        register_client!("roundtrip-client", client)
+        register_context_provider!("roundtrip-provider", provider)
+
+        agent = Agent(
+            name = "RoundTripAgent",
+            instructions = "Round-trip me.",
+            client = client,
+            tools = [declarative_echo_tool],
+            context_providers = Any[provider],
+            options = ChatOptions(max_tokens = 32, additional = Dict{String, Any}("seed" => 3)),
+        )
+
+        yaml = agent_to_yaml(agent)
+        restored = agent_from_yaml(yaml)
+
+        @test occursin("roundtrip-client", yaml)
+        @test restored.client === client
+        @test restored.tools == [declarative_echo_tool]
+        @test restored.context_providers == Any[provider]
+        @test restored.options.max_tokens == 32
+        @test restored.options.additional["seed"] == 3
+
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+    end
+
+    @testset "agent_to_file / agent_from_file use YAML extension" begin
+        empty!(AgentFramework._TOOL_REGISTRY)
+        empty!(AgentFramework._CLIENT_REGISTRY)
+        empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+
+        client = DeclarativeMockChatClient("file roundtrip")
+        provider = DeclarativeTrackingProvider(source_id = "file")
+        register_tool!("decl_echo", declarative_echo_tool)
+        register_client!("file-client", client)
+        register_context_provider!("file-provider", provider)
+
+        agent = Agent(
+            name = "FileAgent",
+            instructions = "Persist me.",
+            client = client,
+            tools = [declarative_echo_tool],
+            context_providers = Any[provider],
+        )
+
+        tmpfile = tempname() * ".yaml"
+        try
+            agent_to_file(agent, tmpfile)
+            @test isfile(tmpfile)
+            raw = read(tmpfile, String)
+            @test occursin("kind: \"Prompt\"", raw)
+
+            restored = agent_from_file(tmpfile)
+            @test restored.name == "FileAgent"
+            @test restored.client === client
+        finally
+            isfile(tmpfile) && rm(tmpfile)
+            empty!(AgentFramework._TOOL_REGISTRY)
+            empty!(AgentFramework._CLIENT_REGISTRY)
+            empty!(AgentFramework._CONTEXT_PROVIDER_REGISTRY)
+        end
+    end
 end

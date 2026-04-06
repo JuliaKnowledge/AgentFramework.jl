@@ -56,6 +56,22 @@ using Test
         @test !supports_web_search(client)
     end
 
+    @testset "FoundryChatClient capabilities" begin
+        client = FoundryChatClient(
+            model = "gpt-5.3",
+            project_endpoint = "https://acct.services.ai.azure.com/api/projects/_project",
+            token_provider = () -> "token",
+        )
+        @test supports_streaming(client)
+        @test supports_tool_calling(client)
+        @test supports_structured_output(client)
+        @test !supports_embeddings(client)
+        @test !supports_image_generation(client)
+        @test !supports_code_interpreter(client)
+        @test !supports_file_search(client)
+        @test !supports_web_search(client)
+    end
+
     # ── has_capability dispatch ──────────────────────────────────────────────
     @testset "has_capability dispatch" begin
         ollama = OllamaChatClient(model="test", base_url="http://localhost:11434")
