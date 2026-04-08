@@ -21,7 +21,7 @@ card = get_agent_card(client)
 println(card.name, ": ", card.description)
 
 # Send a message and wait for completion
-response = send_message(client, Message(:user, "Hello, remote agent!"))
+response = AgentFramework.A2A.send_message(client, Message(:user, "Hello, remote agent!"))
 println(get_text(response))
 ```
 
@@ -176,10 +176,10 @@ Sends a [`Message`](@ref) to the remote agent. By default, blocks until the task
 
 ```julia
 # Blocking — waits for completion
-response = send_message(client, Message(:user, "Hello"))
+response = AgentFramework.A2A.send_message(client, Message(:user, "Hello"))
 
 # Non-blocking — returns immediately, may include a continuation token
-response = send_message(client, Message(:user, "Hello"); background = true)
+response = AgentFramework.A2A.send_message(client, Message(:user, "Hello"); background = true)
 ```
 
 **Keyword arguments:**
@@ -194,8 +194,8 @@ response = send_message(client, Message(:user, "Hello"); background = true)
 Retrieves the current state of a task by its continuation token or task ID.
 
 ```julia
-response = get_task(client, token)
-response = get_task(client, "task-id-string")
+response = AgentFramework.A2A.get_task(client, token)
+response = AgentFramework.A2A.get_task(client, "task-id-string")
 ```
 
 ### `wait_for_completion`
@@ -203,7 +203,7 @@ response = get_task(client, "task-id-string")
 Polls a task until it reaches a terminal state or exceeds `max_polls`.
 
 ```julia
-response = wait_for_completion(client, token; poll_interval = 2.0, max_polls = 100)
+response = AgentFramework.A2A.wait_for_completion(client, token; poll_interval = 2.0, max_polls = 100)
 ```
 
 ## A2ARemoteAgent
@@ -245,7 +245,7 @@ Returns a `ResponseStream{AgentResponseUpdate}` that yields incremental updates 
 Manually poll a task by its continuation token.
 
 ```julia
-response = poll_task(agent, token; session = session, background = true)
+response = AgentFramework.A2A.poll_task(agent, token; session = session, background = true)
 ```
 
 ## Conversion Utilities
@@ -273,10 +273,14 @@ These functions convert between AgentFramework types and A2A JSON-RPC representa
 
 ```julia
 try
-    response = send_message(client, message)
-catch e::A2ATimeoutError
-    println("Task timed out: ", e.message)
-catch e::A2AProtocolError
-    println("Protocol error on method ", e.method, ": ", e.message)
+    response = AgentFramework.A2A.send_message(client, Message(:user, "Hello"))
+catch e
+    if e isa A2ATimeoutError
+        println("Task timed out: ", e.message)
+    elseif e isa A2AProtocolError
+        println("Protocol error on method ", e.method, ": ", e.message)
+    else
+        rethrow()
+    end
 end
 ```

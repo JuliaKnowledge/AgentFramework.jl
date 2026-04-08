@@ -236,7 +236,7 @@ function AgentFramework.get_response(
     api_messages = convert_messages(messages)
 
     # 2. Make the API call
-    response = HTTP.post(client.api_url, ..., body=JSON3.write(api_messages))
+    response = HTTP.Response(200, JSON3.write(Dict("text" => "Hello from a custom provider")))
 
     # 3. Parse the response into a ChatResponse
     body = JSON3.read(response.body)

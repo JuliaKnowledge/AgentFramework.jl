@@ -254,6 +254,16 @@ get_data.result_parser = result -> "Found $(result["count"]) items"
 ### Finding Tools
 
 ```julia
+@tool function calculate(expression::String)
+    "Evaluate a numeric expression."
+    return "42"
+end
+
+@tool function current_time()
+    "Get the current time."
+    return "12:00"
+end
+
 tools = [get_weather, calculate, current_time]
 tool = find_tool(tools, "calculate")  # Returns the FunctionTool or nothing
 ```

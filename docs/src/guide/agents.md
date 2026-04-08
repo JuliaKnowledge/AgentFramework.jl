@@ -58,7 +58,7 @@ base_agent = Agent(
 # Create specialized variants
 math_agent = with_instructions(base_agent, "You are a math tutor. Show your work step by step.")
 math_agent = with_name(math_agent, "MathTutor")
-math_agent = with_tools(math_agent, [calculate])
+math_agent = with_tools(math_agent, [my_extra_tool])
 
 # Override chat options
 fast_agent = with_options(base_agent, ChatOptions(temperature=0.0, max_tokens=100))
@@ -220,7 +220,7 @@ simple_agent = ChatCompletionAgent(
 assistant = AssistantAgent(
     name = "AzureAssistant",
     client = azure_client,
-    assistant_id = "asst_abc123",  # Service-managed assistant ID
+    instructions = "You are a service-managed assistant.",
 )
 ```
 

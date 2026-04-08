@@ -140,7 +140,7 @@ agent = Agent(
 The [`@middleware`](@ref) macro provides syntactic sugar for defining middleware:
 
 ```julia
-@middleware my_middleware function(ctx, next)
+@middleware :chat my_middleware function(ctx, next)
     @info "Before"
     result = next(ctx)
     @info "After"
@@ -203,7 +203,7 @@ with_retry!(agent)  # Adds retry middleware with defaults
 Use [`TokenBucketRateLimiter`](@ref) with [`rate_limit_chat_middleware`](@ref):
 
 ```julia
-limiter = TokenBucketRateLimiter(max_tokens=10, refill_rate=1.0)
+limiter = TokenBucketRateLimiter(requests_per_second=1.0, burst=10)
 
 agent = Agent(
     client = client,
@@ -214,7 +214,9 @@ agent = Agent(
 Or with the convenience builder:
 
 ```julia
-with_rate_limit!(agent, max_tokens=10, refill_rate=1.0)
+agent = Agent(client=client)
+limiter = TokenBucketRateLimiter(requests_per_second=1.0, burst=10)
+with_rate_limit!(agent, limiter)
 ```
 
 ### Content Filtering
@@ -224,7 +226,7 @@ function content_filter_middleware(ctx::ChatContext, next::Function)
     # Check input messages for blocked content
     for msg in ctx.messages
         text = get_text(msg)
-        if contains(text, "forbidden")
+        if occursin("forbidden", text)
             return ChatResponse(
                 messages = [Message(:assistant, "I cannot process that request.")],
                 finish_reason = CONTENT_FILTER,

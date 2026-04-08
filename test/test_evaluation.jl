@@ -672,6 +672,25 @@ end
         end
     end
 
+    @testset "workflow eval extraction" begin
+        conversation = make_conversation([
+            (:user, "Draft a launch announcement"),
+            (:assistant, "Review: Draft a launch announcement"),
+        ])
+        result = WorkflowRunResult(
+            events = [
+                event_executor_invoked("reviewer"),
+                event_executor_completed("reviewer", Dict("conversation" => conversation)),
+            ],
+            state = WF_IDLE,
+        )
+
+        agent_data = AgentFramework._extract_agent_eval_data(result)
+        @test haskey(agent_data, "reviewer")
+        @test length(agent_data["reviewer"]) == 1
+        @test agent_data["reviewer"][1].conversation == conversation
+    end
+
     # ═══════════════════════════════════════════════════════════════════════
     #  9. WorkflowAgent
     # ═══════════════════════════════════════════════════════════════════════

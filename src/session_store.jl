@@ -95,6 +95,7 @@ function load_session(store::FileSessionStore, id::String)::Union{Nothing, Agent
 end
 
 function save_session!(store::FileSessionStore, session::AgentSession)
+    isdir(store.directory) || mkpath(store.directory)
     path = _session_path(store, session.id)
     lock(store.lock) do
         json = serialize_to_json(session)

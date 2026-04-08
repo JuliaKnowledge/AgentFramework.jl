@@ -21,13 +21,13 @@ using AgentFramework.Hosting
 runtime = HostedRuntime()
 
 # Or persist to disk
-runtime = HostedRuntime("/path/to/storage")
+runtime = HostedRuntime(storage_dir)
 
 # Register an agent
 agent = Agent(
     name = "helper",
     instructions = "You are a helpful assistant.",
-    chat_client = OpenAIChatClient(model = "gpt-4o-mini"),
+    client = OpenAIChatClient(model = "gpt-4o-mini"),
 )
 register_agent!(runtime, agent)
 
@@ -65,7 +65,7 @@ runtime = HostedRuntime()
 **File-backed runtime** (persists sessions, history, checkpoints, and workflow runs to disk):
 
 ```julia
-runtime = HostedRuntime("/path/to/storage")
+runtime = HostedRuntime(storage_dir)
 ```
 
 The directory-based constructor creates subdirectories for `sessions/`, `history/`, `checkpoints/`, and `runs/`.
@@ -108,7 +108,7 @@ Returns a named tuple `(response, session, history)`:
 Retrieve an existing session and its conversation history.
 
 ```julia
-info = get_agent_session(runtime, "helper", session_id)
+info = get_agent_session(runtime, "helper", result.session.id)
 info.session   # => AgentSession
 info.history   # => Vector{Message}
 ```
@@ -156,7 +156,7 @@ Returns a [`HostedWorkflowRun`](#hostedworkflowrun).
 ### `get_workflow_run`
 
 ```julia
-run = get_workflow_run(runtime, "my-workflow", run_id)
+run = get_workflow_run(runtime, "my-workflow", run.id)
 ```
 
 ### `list_workflow_runs`
@@ -171,7 +171,7 @@ runs = list_workflow_runs(runtime)  # all workflows
 Resume a paused workflow (e.g., after human-in-the-loop approval).
 
 ```julia
-run = resume_workflow_run!(runtime, "my-workflow", run_id, Dict("request_id" => "approved"))
+run = resume_workflow_run!(runtime, "my-workflow", run.id, Dict("request_id" => "approved"))
 ```
 
 ## HostedWorkflowRun
@@ -212,7 +212,7 @@ store = InMemoryHostedRunStore()
 Stores each run as a JSON file in a directory.
 
 ```julia
-store = FileHostedRunStore("/path/to/runs")
+store = FileHostedRunStore(runs_dir)
 ```
 
 Both stores implement:

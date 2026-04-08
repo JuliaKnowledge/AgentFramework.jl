@@ -291,14 +291,18 @@ macro tool(funcdef)
         end
     end
 
+    impl_name = gensym(fname)
+    impl_sig = deepcopy(sig)
+    impl_sig.args[1] = impl_name
+    impl_funcdef = Expr(:function, impl_sig, body)
     fname_str = String(fname)
 
     quote
-        # Define the actual function
-        $(esc(funcdef))
+        # Define the implementation under a private name so module-scope bindings
+        # can still use the public name for the FunctionTool object.
+        $(esc(impl_funcdef))
 
-        # Build the FunctionTool
-        let props = Dict{String, Any}()
+        $(esc(fname)) = let props = Dict{String, Any}()
             $(Expr(:block, param_exprs...))
             params = Dict{String, Any}(
                 "type" => "object",
@@ -308,10 +312,10 @@ macro tool(funcdef)
             if !isempty(req)
                 params["required"] = req
             end
-            $(esc(fname)) = FunctionTool(
+            FunctionTool(
                 name = $fname_str,
                 description = $description,
-                func = $(esc(fname)),
+                func = $(esc(impl_name)),
                 parameters = params,
             )
         end

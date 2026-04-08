@@ -1,5 +1,7 @@
 .DS_Store
 Manifest.toml
+/build/
+/docs/_generated/
 bin/
 obj/
 __pycache__/

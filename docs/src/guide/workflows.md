@@ -122,10 +122,14 @@ planner_agent = Agent(
     client = client,
 )
 
-planner = agent_executor(planner_agent)
+planner = agent_executor("planner", planner_agent)
+writer = @executor "writer" function(msg::String, ctx)
+    yield_output(ctx, msg)
+end
 
 workflow = WorkflowBuilder(name="PlanAndExecute", start=planner) |>
-    # ... add more executors and edges
+    b -> add_executor(b, writer) |>
+    b -> add_edge(b, planner.id, writer.id) |>
     build
 ```
 
@@ -138,7 +142,7 @@ upper = @executor "upper" function(msg::String, ctx)
     send_message(ctx, uppercase(msg))
 end
 
-formatter = @executor "formatter" "Format data as JSON" function(data::Dict, ctx)
+formatter = @executor "formatter" "Format data as JSON" function(data::Dict{String, Any}, ctx)
     result = JSON3.write(data)
     yield_output(ctx, result)
 end
@@ -198,8 +202,8 @@ Conditional routing based on data:
 
 ```julia
 add_switch(b, "classifier", [
-    ("positive" => "celebrate", data -> data["sentiment"] > 0.5),
-    ("negative" => "console", data -> data["sentiment"] <= 0.5),
+    (data -> get(data, "sentiment", 0.0) > 0.5) => "celebrate",
+    (data -> get(data, "sentiment", 0.0) <= 0.5) => "console",
 ])
 ```
 
@@ -214,7 +218,7 @@ Chain executors in a linear pipeline:
 ```julia
 workflow = SequentialBuilder(
     name = "Pipeline",
-    executors = [step1, step2, step3],
+    participants = [step1, step2, step3],
 ) |> build
 ```
 
@@ -225,7 +229,7 @@ Run executors in parallel and aggregate results:
 ```julia
 workflow = ConcurrentBuilder(
     name = "ParallelResearch",
-    executors = [researcher1, researcher2, researcher3],
+    participants = [researcher1, researcher2, researcher3],
     aggregator = (results, ctx) -> yield_output(ctx, merge_results(results)),
 ) |> build
 ```
@@ -304,8 +308,7 @@ The engine emits [`WorkflowEvent`](@ref) items for observability:
 Use event channels for real-time monitoring:
 
 ```julia
-events_channel = Channel{WorkflowEvent}(32)
-result = run_workflow(workflow, "input", events_channel=events_channel)
+events_channel = run_workflow(workflow, "input"; stream = true)
 
 # Process events as they arrive
 for event in events_channel
@@ -343,7 +346,7 @@ storage = InMemoryCheckpointStorage()
 #### FileCheckpointStorage
 
 ```julia
-storage = FileCheckpointStorage(directory="checkpoints")
+storage = FileCheckpointStorage(joinpath(storage_dir, "checkpoints"))
 ```
 
 ### Using Checkpoints
@@ -351,11 +354,17 @@ storage = FileCheckpointStorage(directory="checkpoints")
 Attach checkpoint storage when building a workflow:
 
 ```julia
+step1_exec = agent_executor("step1", step1)
+step2_exec = agent_executor("step2", step2)
+
 workflow = WorkflowBuilder(
     name = "ResumableWorkflow",
-    start = step1,
-    checkpoint_storage = FileCheckpointStorage(directory="checkpoints"),
-) |> ... |> build
+    start = step1_exec,
+    checkpoint_storage = FileCheckpointStorage(joinpath(storage_dir, "checkpoints")),
+) |>
+    b -> add_executor(b, step2_exec) |>
+    b -> add_edge(b, step1_exec.id, step2_exec.id) |>
+    build
 ```
 
 ## Human-in-the-Loop

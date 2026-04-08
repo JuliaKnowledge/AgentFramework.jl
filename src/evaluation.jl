@@ -802,18 +802,18 @@ function _extract_agent_eval_data(result::WorkflowRunResult)
     i = 1
     while i <= length(events)
         evt = events[i]
-        if evt.event_type == EVT_EXECUTOR_INVOKED
-            executor_id = string(get(evt.data, "executor_id", "unknown"))
+        if evt.type == EVT_EXECUTOR_INVOKED
+            executor_id = something(evt.executor_id, evt.data isa AbstractDict ? string(get(evt.data, "executor_id", "unknown")) : "unknown")
             # Skip internal executors
             if !startswith(executor_id, "_") && !(executor_id in ("input-conversation", "end-conversation", "end"))
                 # Look for matching EXECUTOR_COMPLETED
                 for j in (i+1):length(events)
                     evt_j = events[j]
-                    if evt_j.event_type == EVT_EXECUTOR_COMPLETED
-                        comp_exec_id = string(get(evt_j.data, "executor_id", ""))
+                    if evt_j.type == EVT_EXECUTOR_COMPLETED
+                        comp_exec_id = something(evt_j.executor_id, evt_j.data isa AbstractDict ? string(get(evt_j.data, "executor_id", "")) : "")
                         if comp_exec_id == executor_id
                             # Extract conversation from the completed event data
-                            conv_data = get(evt_j.data, "conversation", nothing)
+                            conv_data = evt_j.data isa AbstractDict ? get(evt_j.data, "conversation", nothing) : nothing
                             if conv_data isa Vector
                                 conversation = Message[]
                                 for md in conv_data

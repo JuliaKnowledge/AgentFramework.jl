@@ -28,7 +28,7 @@ using AgentFramework.CodingAgents
 agent = Agent(
     name = "copilot-agent",
     instructions = "You are a coding assistant powered by GitHub Copilot.",
-    chat_client = GitHubCopilotChatClient(),
+    client = GitHubCopilotChatClient(),
 )
 
 response = run_agent(agent, "Write a Julia function to compute fibonacci numbers")
@@ -44,7 +44,7 @@ using AgentFramework.CodingAgents
 agent = Agent(
     name = "claude-agent",
     instructions = "You are a coding assistant powered by Claude.",
-    chat_client = ClaudeCodeChatClient(model = "claude-sonnet-4-20250514"),
+    client = ClaudeCodeChatClient(model = "claude-sonnet-4-20250514"),
 )
 
 response = run_agent(agent, "Review this code for bugs")
@@ -230,7 +230,7 @@ Claude Code supports structured output through JSON schema:
 ```julia
 agent = Agent(
     name = "structured-agent",
-    chat_client = ClaudeCodeChatClient(),
+    client = ClaudeCodeChatClient(),
 )
 
 options = ChatOptions(
@@ -264,7 +264,7 @@ using AgentFramework.CodingAgents
 
 agent = Agent(
     name = "streaming-agent",
-    chat_client = GitHubCopilotChatClient(),
+    client = GitHubCopilotChatClient(),
 )
 
 stream = run_agent_streaming(agent, "Explain quicksort step by step")
@@ -313,8 +313,12 @@ Both clients raise standard AgentFramework chat client exceptions:
 ```julia
 try
     response = run_agent(agent, "Hello")
-catch e::ChatClientError
-    println("CLI error: ", e.message)
+catch e
+    if e isa ChatClientError
+        println("CLI error: ", e.message)
+    else
+        rethrow()
+    end
 end
 ```
 

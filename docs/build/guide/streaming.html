@@ -15,7 +15,7 @@ stream = run_agent_streaming(agent, &quot;Tell me a short story about a robot.&q
 for update in stream
     print(get_text(update))
 end
-println()  # Final newline</code></pre><h3 id="Getting-the-Final-Response"><a class="docs-heading-anchor" href="#Getting-the-Final-Response">Getting the Final Response</a><a id="Getting-the-Final-Response-1"></a><a class="docs-heading-anchor-permalink" href="#Getting-the-Final-Response" title="Permalink"></a></h3><p>After iterating, retrieve the complete <a href="agents.html#AgentResponse"><code>AgentResponse</code></a> with <a href="../api/agents.html#AgentFramework.get_final_response"><code>get_final_response</code></a>:</p><pre><code class="language-julia hljs">stream = run_agent_streaming(agent, &quot;Hello!&quot;)
+println()  # Final newline</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Docs example response for: Tell me a short story about a robot. me a short story about a robot.</code></pre><h3 id="Getting-the-Final-Response"><a class="docs-heading-anchor" href="#Getting-the-Final-Response">Getting the Final Response</a><a id="Getting-the-Final-Response-1"></a><a class="docs-heading-anchor-permalink" href="#Getting-the-Final-Response" title="Permalink"></a></h3><p>After iterating, retrieve the complete <a href="agents.html#AgentResponse"><code>AgentResponse</code></a> with <a href="../api/agents.html#AgentFramework.get_final_response"><code>get_final_response</code></a>:</p><pre><code class="language-julia hljs">stream = run_agent_streaming(agent, &quot;Hello!&quot;)
 for update in stream
     print(get_text(update))
 end
@@ -28,7 +28,9 @@ println(&quot;Finish reason: &quot;, response.finish_reason)
 if response.usage_details !== nothing
     println(&quot;Tokens: &quot;, response.usage_details.input_tokens, &quot; in / &quot;,
             response.usage_details.output_tokens, &quot; out&quot;)
-end</code></pre><h2 id="AgentResponseUpdate"><a class="docs-heading-anchor" href="#AgentResponseUpdate">AgentResponseUpdate</a><a id="AgentResponseUpdate-1"></a><a class="docs-heading-anchor-permalink" href="#AgentResponseUpdate" title="Permalink"></a></h2><p>Each <a href="@ref"><code>AgentResponseUpdate</code></a> contains a chunk of the response:</p><pre><code class="language-julia hljs">stream = run_agent_streaming(agent, &quot;Hello!&quot;)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Docs example response for: Hello!ponse for: Hello!
+Model: docs-example-model
+Finish reason: STOP</code></pre><h2 id="AgentResponseUpdate"><a class="docs-heading-anchor" href="#AgentResponseUpdate">AgentResponseUpdate</a><a id="AgentResponseUpdate-1"></a><a class="docs-heading-anchor-permalink" href="#AgentResponseUpdate" title="Permalink"></a></h2><p>Each <a href="@ref"><code>AgentResponseUpdate</code></a> contains a chunk of the response:</p><pre><code class="language-julia hljs">stream = run_agent_streaming(agent, &quot;Hello!&quot;)
 for update in stream
     # Text content (convenience accessor)
     text = update.text
@@ -54,7 +56,9 @@ for update in stream
     if update.usage_details !== nothing
         println(&quot;Tokens used: &quot;, update.usage_details.output_tokens)
     end
-end</code></pre><h2 id="Streaming-with-Tools"><a class="docs-heading-anchor" href="#Streaming-with-Tools">Streaming with Tools</a><a id="Streaming-with-Tools-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming-with-Tools" title="Permalink"></a></h2><p>When an agent has tools, streaming works seamlessly with the tool execution loop. Tool calls are assembled from streaming fragments, executed, and the results are sent back to the LLM — which then streams the final response:</p><pre><code class="language-julia hljs">@tool function get_weather(location::String)
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Docs example response for: Hello!Role: assistant
+ponse for: Hello!
+Finished: STOP</code></pre><h2 id="Streaming-with-Tools"><a class="docs-heading-anchor" href="#Streaming-with-Tools">Streaming with Tools</a><a id="Streaming-with-Tools-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming-with-Tools" title="Permalink"></a></h2><p>When an agent has tools, streaming works seamlessly with the tool execution loop. Tool calls are assembled from streaming fragments, executed, and the results are sent back to the LLM — which then streams the final response:</p><pre><code class="language-julia hljs">@tool function get_weather(location::String)
     &quot;Get weather for a location.&quot;
     return &quot;Sunny, 22°C in $(location)&quot;
 end
@@ -75,7 +79,7 @@ for update in stream
         print(text)
     end
 end
-println()</code></pre><h2 id="StreamingToolAccumulator"><a class="docs-heading-anchor" href="#StreamingToolAccumulator">StreamingToolAccumulator</a><a id="StreamingToolAccumulator-1"></a><a class="docs-heading-anchor-permalink" href="#StreamingToolAccumulator" title="Permalink"></a></h2><p>Under the hood, <a href="streaming.html#StreamingToolAccumulator"><code>StreamingToolAccumulator</code></a> assembles tool calls from streaming fragments. Tool calls arrive in pieces across multiple chunks:</p><ol><li>First chunk: tool call ID and function name</li><li>Subsequent chunks: argument JSON fragments</li><li>Framework accumulates all fragments into complete tool calls</li></ol><p>You typically don&#39;t interact with this directly, but it&#39;s available for custom streaming logic:</p><pre><code class="language-julia hljs">acc = StreamingToolAccumulator()
+println()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Docs example response for: What&#39;s the weather in Paris?What&#39;s the weather in Paris?</code></pre><h2 id="StreamingToolAccumulator"><a class="docs-heading-anchor" href="#StreamingToolAccumulator">StreamingToolAccumulator</a><a id="StreamingToolAccumulator-1"></a><a class="docs-heading-anchor-permalink" href="#StreamingToolAccumulator" title="Permalink"></a></h2><p>Under the hood, <a href="streaming.html#StreamingToolAccumulator"><code>StreamingToolAccumulator</code></a> assembles tool calls from streaming fragments. Tool calls arrive in pieces across multiple chunks:</p><ol><li>First chunk: tool call ID and function name</li><li>Subsequent chunks: argument JSON fragments</li><li>Framework accumulates all fragments into complete tool calls</li></ol><p>You typically don&#39;t interact with this directly, but it&#39;s available for custom streaming logic:</p><pre><code class="language-julia hljs">acc = StreamingToolAccumulator()
 
 # Accumulate fragments (normally done by the framework)
 accumulate_tool_call!(acc, 0, call_id=&quot;call_123&quot;, name=&quot;get_weather&quot;)
@@ -89,7 +93,7 @@ has_tool_calls(acc)            # true
 tool_calls = get_accumulated_tool_calls(acc)
 
 # Reset for next iteration
-reset_accumulator!(acc)</code></pre><h2 id="Streaming-with-Sessions"><a class="docs-heading-anchor" href="#Streaming-with-Sessions">Streaming with Sessions</a><a id="Streaming-with-Sessions-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming-with-Sessions" title="Permalink"></a></h2><p>Streaming works with sessions for multi-turn conversations:</p><pre><code class="language-julia hljs">history = InMemoryHistoryProvider()
+reset_accumulator!(acc)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Dict{Int64, Dict{String, Any}}()</code></pre><h2 id="Streaming-with-Sessions"><a class="docs-heading-anchor" href="#Streaming-with-Sessions">Streaming with Sessions</a><a id="Streaming-with-Sessions-1"></a><a class="docs-heading-anchor-permalink" href="#Streaming-with-Sessions" title="Permalink"></a></h2><p>Streaming works with sessions for multi-turn conversations:</p><pre><code class="language-julia hljs">history = InMemoryHistoryProvider()
 agent = Agent(
     name = &quot;ChatBot&quot;,
     instructions = &quot;You are a friendly assistant.&quot;,
@@ -110,7 +114,8 @@ stream = run_agent_streaming(agent, &quot;What&#39;s my name?&quot;, session=ses
 for update in stream
     print(get_text(update))
 end
-println()</code></pre><h2 id="Chat-Client-Level-Streaming"><a class="docs-heading-anchor" href="#Chat-Client-Level-Streaming">Chat Client-Level Streaming</a><a id="Chat-Client-Level-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Chat-Client-Level-Streaming" title="Permalink"></a></h2><p>For lower-level control, use <a href="../api/chat_client.html#AgentFramework.get_response_streaming"><code>get_response_streaming</code></a> directly on a chat client:</p><pre><code class="language-julia hljs">client = OllamaChatClient(model=&quot;qwen3:8b&quot;)
+println()</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Docs example response for: My name is Alice.for: My name is Alice.
+Docs example response for: What&#39;s my name? for: What&#39;s my name?</code></pre><h2 id="Chat-Client-Level-Streaming"><a class="docs-heading-anchor" href="#Chat-Client-Level-Streaming">Chat Client-Level Streaming</a><a id="Chat-Client-Level-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Chat-Client-Level-Streaming" title="Permalink"></a></h2><p>For lower-level control, use <a href="../api/chat_client.html#AgentFramework.get_response_streaming"><code>get_response_streaming</code></a> directly on a chat client:</p><pre><code class="language-julia hljs">client = OllamaChatClient(model=&quot;qwen3:8b&quot;)
 messages = [Message(:user, &quot;Hello!&quot;)]
 options = ChatOptions()
 
@@ -125,7 +130,8 @@ println()
 
 # Build a complete ChatResponse from the collected updates
 response = ChatResponse(updates)
-println(&quot;Complete text: &quot;, response.text)</code></pre><h2 id="Example:-Streaming-with-Progress-Display"><a class="docs-heading-anchor" href="#Example:-Streaming-with-Progress-Display">Example: Streaming with Progress Display</a><a id="Example:-Streaming-with-Progress-Display-1"></a><a class="docs-heading-anchor-permalink" href="#Example:-Streaming-with-Progress-Display" title="Permalink"></a></h2><p>Here&#39;s a complete example with a progress display:</p><pre><code class="language-julia hljs">using AgentFramework
+println(&quot;Complete text: &quot;, response.text)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Docs example response for: Hello!
+Complete text: Docs example response for: Hello!</code></pre><h2 id="Example:-Streaming-with-Progress-Display"><a class="docs-heading-anchor" href="#Example:-Streaming-with-Progress-Display">Example: Streaming with Progress Display</a><a id="Example:-Streaming-with-Progress-Display-1"></a><a class="docs-heading-anchor-permalink" href="#Example:-Streaming-with-Progress-Display" title="Permalink"></a></h2><p>Here&#39;s a complete example with a progress display:</p><pre><code class="language-julia hljs">using AgentFramework
 
 client = OllamaChatClient(model=&quot;qwen3:8b&quot;)
 
@@ -145,18 +151,21 @@ agent = Agent(
 println(&quot;🤖 Starting analysis...&quot;)
 stream = run_agent_streaming(agent, &quot;Analyze the sales dataset and explain the findings.&quot;)
 
-char_count = 0
+char_count = Ref(0)
 for update in stream
     text = get_text(update)
     if !isempty(text)
         print(text)
-        char_count += length(text)
+        char_count[] += length(text)
     end
 end
-println(&quot;\n\n📊 Response: $(char_count) characters&quot;)
+println(&quot;\n\n📊 Response: $(char_count[]) characters&quot;)
 
 response = get_final_response(stream)
 if response !== nothing &amp;&amp; response.usage_details !== nothing
     usage = response.usage_details
     println(&quot;📈 Tokens: $(something(usage.input_tokens, 0)) input, $(something(usage.output_tokens, 0)) output&quot;)
-end</code></pre><h2 id="Workflow-Streaming"><a class="docs-heading-anchor" href="#Workflow-Streaming">Workflow Streaming</a><a id="Workflow-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Workflow-Streaming" title="Permalink"></a></h2><p>Workflows also support streaming via event channels. See the <a href="@ref">Workflows</a> guide for details on streaming <a href="../api/workflows.html#AgentFramework.WorkflowEvent"><code>WorkflowEvent</code></a> items during multi-agent orchestration.</p><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="@ref">Agents</a> — Agent configuration that affects streaming behavior</li><li><a href="providers.html#Providers">Providers</a> — Provider-specific streaming capabilities</li><li><a href="@ref">Middleware</a> — How middleware interacts with streaming</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="providers.html">« Providers</a><a class="docs-footer-nextpage" href="advanced.html">Advanced Topics »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Sunday 5 April 2026 14:18">Sunday 5 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
+end</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">🤖 Starting analysis...
+Docs example response for: Analyze the sales dataset and explain the findings.sales dataset and explain the findings.
+
+📊 Response: 117 characters</code></pre><h2 id="Workflow-Streaming"><a class="docs-heading-anchor" href="#Workflow-Streaming">Workflow Streaming</a><a id="Workflow-Streaming-1"></a><a class="docs-heading-anchor-permalink" href="#Workflow-Streaming" title="Permalink"></a></h2><p>Workflows also support streaming via event channels. See the <a href="@ref">Workflows</a> guide for details on streaming <a href="../api/workflows.html#AgentFramework.WorkflowEvent"><code>WorkflowEvent</code></a> items during multi-agent orchestration.</p><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="@ref">Agents</a> — Agent configuration that affects streaming behavior</li><li><a href="providers.html#Providers">Providers</a> — Provider-specific streaming capabilities</li><li><a href="@ref">Middleware</a> — How middleware interacts with streaming</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="providers.html">« Providers</a><a class="docs-footer-nextpage" href="advanced.html">Advanced Topics »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Tuesday 7 April 2026 22:00">Tuesday 7 April 2026</span>. Using Julia version 1.12.5.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>

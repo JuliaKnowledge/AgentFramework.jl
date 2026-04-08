@@ -70,6 +70,36 @@ using Test
         @test toggle.parameters["properties"]["enabled"]["type"] == "boolean"
     end
 
+    @testset "@tool works in local scope" begin
+        scoped_tool = let
+            @tool function local_greet(name::String)
+                "Greet from a local scope."
+                return "Hello, " * name
+            end
+            local_greet
+        end
+
+        @test scoped_tool isa FunctionTool
+        @test scoped_tool.name == "local_greet"
+        @test invoke_tool(scoped_tool, Dict{String, Any}("name" => "Dana")) == "Hello, Dana"
+    end
+
+    @testset "@tool works at module scope" begin
+        mod = Module(:ToolMacroModuleScope)
+        Core.eval(mod, :(using AgentFramework))
+        Core.eval(mod, quote
+            @tool function module_greet(name::String)
+                "Greet from module scope."
+                return "Hello, " * name
+            end
+        end)
+
+        module_tool = Core.eval(mod, :module_greet)
+        @test module_tool isa FunctionTool
+        @test module_tool.name == "module_greet"
+        @test invoke_tool(module_tool, Dict{String, Any}("name" => "Mia")) == "Hello, Mia"
+    end
+
     @testset "@tool schema format" begin
         @tool function my_tool(x::String)
             "A tool."

@@ -23,7 +23,7 @@ client = BedrockChatClient(model = "anthropic.claude-3-haiku-20240307-v1:0")
 agent = Agent(
     name = "bedrock-agent",
     instructions = "You are a helpful assistant.",
-    chat_client = client,
+    client = client,
 )
 
 response = run_agent(agent, "What is Amazon Bedrock?")
@@ -171,7 +171,7 @@ end
 agent = Agent(
     name = "weather-agent",
     instructions = "Help users with weather queries.",
-    chat_client = BedrockChatClient(model = "anthropic.claude-3-haiku-20240307-v1:0"),
+    client = BedrockChatClient(model = "anthropic.claude-3-haiku-20240307-v1:0"),
     tools = [get_weather],
 )
 
@@ -250,9 +250,13 @@ Bedrock errors are raised as standard AgentFramework chat client exceptions:
 ```julia
 try
     response = run_agent(agent, "Hello")
-catch e::ChatClientInvalidAuthError
-    println("AWS credentials not configured: ", e.message)
-catch e::ChatClientError
-    println("Bedrock API error: ", e.message)
+catch e
+    if e isa ChatClientInvalidAuthError
+        println("AWS credentials not configured: ", e.message)
+    elseif e isa ChatClientError
+        println("Bedrock API error: ", e.message)
+    else
+        rethrow()
+    end
 end
 ```

@@ -10,32 +10,41 @@ Define agents and workflows from YAML or JSON configuration files, enabling no-c
 
 ```julia
 using AgentFramework
+using Base64
 
 # From YAML
 agent = agent_from_yaml("""
 name: ResearchAssistant
 instructions: You are a research assistant. Provide well-sourced answers.
-model: qwen3:8b
-provider: ollama
+client:
+  type: OllamaChatClient
+  model: qwen3:8b
+  base_url: http://localhost:11434
 tools:
   - search_web
   - summarize
 """)
 
 # From JSON
-agent = agent_from_json("""{"name": "Helper", "instructions": "Be helpful.", "model": "qwen3:8b"}""")
+agent = agent_from_json(
+    """{"name":"Helper","instructions":"Be helpful.","client":{"type":"OllamaChatClient","model":"qwen3:8b","base_url":"http://localhost:11434"}}""",
+)
 
-# From file (auto-detects format by extension)
-agent = agent_from_file("agents/researcher.yaml")
+# Serialize and round-trip through a file
+agent_path = joinpath(storage_dir, "researcher.yaml")
+agent_to_file(agent, agent_path)
+agent = agent_from_file(agent_path)
 
-# Serialize back
 yaml_str = agent_to_yaml(agent)
-agent_to_file(agent, "agents/researcher.yaml")
 ```
 
 ### Declarative Workflows
 
 ```julia
+# Register handlers before loading
+register_handler!("analyze_handler", (data, ctx) -> send_message(ctx, "Analysis: " * string(data)))
+register_handler!("review_handler", (data, ctx) -> yield_output(ctx, "Review: " * string(data)))
+
 workflow = workflow_from_yaml("""
 name: ReviewPipeline
 executors:
@@ -49,10 +58,6 @@ edges:
 start: analyzer
 outputs: [reviewer]
 """)
-
-# Register handlers before loading
-register_handler!("analyze_handler", (data, ctx) -> send_message(ctx, analyze(data)))
-register_handler!("review_handler", (data, ctx) -> yield_output(ctx, review(data)))
 ```
 
 Use [`register_handler!`](@ref), [`register_tool!`](@ref), [`register_client!`](@ref), and [`register_context_provider!`](@ref) to make components available for declarative loading.
@@ -67,13 +72,13 @@ using AgentFramework
 config = CompactionConfig(
     strategy = SLIDING_WINDOW,    # Keep only recent messages
     max_tokens = 4096,            # Token budget
-    window_size = 20,             # Number of recent messages to keep
+    keep_recent = 20,             # Number of recent messages to keep
 )
 
 # Or use a compaction pipeline with multiple strategies
 pipeline = CompactionPipeline([
     CompactionConfig(strategy=SELECTIVE_TOOL_CALL),   # First: compact tool calls
-    CompactionConfig(strategy=SLIDING_WINDOW, window_size=30),  # Then: sliding window
+    CompactionConfig(strategy=SLIDING_WINDOW, keep_recent=30),  # Then: sliding window
 ])
 
 # Check if compaction is needed
@@ -110,7 +115,16 @@ Parse and handle content filter results from providers:
 using AgentFramework
 
 # Check filter results
-results = ContentFilterResults(...)
+results = ContentFilterResults(
+    results = [
+        ContentFilterResult(
+            category = FILTER_VIOLENCE,
+            severity = FILTER_HIGH,
+            filtered = true,
+        ),
+    ],
+    blocked = true,
+)
 if is_blocked(results)
     categories = get_filtered_categories(results)
     severity = max_severity(results)
@@ -139,16 +153,16 @@ Send images and audio to models that support them:
 using AgentFramework
 
 # Image from file
-img = image_content("photo.jpg")
+img = image_content(photo_path)
 
 # Image from URL
-img_url = image_url_content("https://example.com/photo.jpg", "image/jpeg")
+img_url = image_url_content("https://example.com/photo.jpg"; media_type="image/jpeg")
 
 # Image from base64
-img_b64 = image_content(base64_data, "image/png")
+img_b64 = image_content(base64decode(base64_data); media_type="image/png")
 
 # Audio
-audio = audio_content("recording.wav")
+audio = audio_content(recording_path)
 
 # Include in a message
 msg = Message(:user, [text_content("What's in this image?"), img])
@@ -179,7 +193,7 @@ set_local!(store, "executor_1", "counter", 0)
 val = get_local(store, "executor_1", "counter")
 
 # Broadcast state (visible to all executors)
-set_broadcast!(store, "shared_config", Dict("mode" => "fast"))
+set_broadcast!(store, "executor_1", "shared_config", Dict("mode" => "fast"))
 config = get_broadcast(store, "shared_config")
 
 # Workflow-level state
@@ -203,11 +217,12 @@ Skills are reusable bundles of instructions, tools, and resources:
 using AgentFramework
 
 # Load skills from a directory
-source = DirectorySkillSource(directory="skills/")
-skills = load_skills!(source)
+source = DirectorySkillSource(directory=skills_dir)
+skills = get_skills(source)
 
 # Create a skills provider for agents
-provider = SkillsProvider(source=source)
+provider = SkillsProvider()
+load_skills!(provider, source)
 agent = Agent(
     client = client,
     context_providers = [provider],
@@ -258,7 +273,7 @@ connect!(mcp_client)
 tools = list_tools(mcp_client)
 
 # Convert MCP tools to FunctionTools for use with agents
-function_tools = mcp_tools_to_function_tools(mcp_client)
+function_tools = load_mcp_tools(mcp_client)
 
 agent = Agent(
     client = client,
@@ -266,8 +281,9 @@ agent = Agent(
 )
 
 # Or use the convenience helper
-agent = Agent(client=client)
-with_mcp_client(agent, mcp_client)
+agent = with_mcp_client(HTTPMCPClient(url="http://localhost:3000/mcp")) do connected
+    Agent(client = client, tools = load_mcp_tools(connected))
+end
 
 # Clean up
 close_mcp!(mcp_client)
@@ -285,11 +301,11 @@ connect!(mcp_client)
 ```julia
 # List and read resources
 resources = list_resources(mcp_client)
-content = read_resource(mcp_client, "file:///path/to/resource")
+content = read_resource(mcp_client, resource_uri)
 
 # List and use prompts
 prompts = list_prompts(mcp_client)
-prompt = get_prompt(mcp_client, "my_prompt", Dict("arg" => "value"))
+prompt = get_prompt(mcp_client, "my_prompt", Dict{String, Any}("arg" => "value"))
 ```
 
 ## Evaluation Framework
@@ -299,27 +315,21 @@ Test agent quality with assertion-based evaluation:
 ```julia
 using AgentFramework
 
-# Define evaluation items
-items = [
-    EvalItem(
-        input = [Message(:user, "What is 2+2?")],
-        expected = "4",
-        checks = [keyword_check(["4"])],
-    ),
-    EvalItem(
-        input = [Message(:user, "Search for Julia programming")],
-        expected = nothing,
-        checks = [tool_called_check("search_web")],
-    ),
-]
+# Build a local evaluator from one or more checks
+evaluator = LocalEvaluator(keyword_check("Docs example response"))
 
 # Evaluate an agent
-results = evaluate_agent(agent, items)
+results = evaluate_agent(
+    agent = agent,
+    queries = ["What is 2+2?"],
+    evaluators = evaluator,
+)
+summary = only(results)
 
 # Check results
-println("Passed: $(eval_passed(results)) / $(eval_total(results))")
-if !all_passed(results)
-    for item_result in results.items
+println("Passed: $(eval_passed(summary)) / $(eval_total(summary))")
+if !all_passed(summary)
+    for item_result in summary.items
         if is_failed(item_result)
             println("Failed: ", item_result.input)
         end
@@ -339,7 +349,11 @@ end
 ### Evaluating Workflows
 
 ```julia
-results = evaluate_workflow(workflow, items)
+workflow_results = evaluate_workflow(
+    workflow = workflow,
+    queries = ["Draft a launch announcement"],
+    evaluators = LocalEvaluator(keyword_check("Review")),
+)
 ```
 
 ## Handoffs Between Agents
@@ -350,8 +364,9 @@ Handoffs enable one agent to transfer control to another:
 using AgentFramework
 
 transfer_tool = HandoffTool(
-    target_agent = specialist_agent,
+    name = "transfer_to_specialist",
     description = "Transfer to the specialist for technical questions.",
+    target = specialist_agent,
 )
 
 main_agent = Agent(
@@ -410,14 +425,22 @@ Serialize agents, messages, and sessions for storage or transmission:
 using AgentFramework
 
 # Messages
-json = serialize_to_json(messages)
-messages = deserialize_from_json(json)
+json = serialize_to_json(message)
+message = deserialize_from_json(json)
 
 # Sessions
 dict = serialize_to_dict(session)
-session = deserialize_from_dict(AgentSession, dict)
+session = deserialize_from_dict(dict)
 
 # Register custom types for serialization
+struct MyCustomType
+    name::String
+end
+
+struct MyStateType
+    count::Int
+end
+
 register_type!(MyCustomType)
 register_state_type!(MyStateType)
 ```
@@ -431,8 +454,8 @@ using AgentFramework
 
 settings = Settings()
 load_from_env!(settings)
-load_from_dotenv!(settings, ".env")
-load_from_toml!(settings, "config.toml")
+load_from_dotenv!(settings, dotenv_path)
+load_from_toml!(settings, config_toml_path)
 
 api_key = get_secret(settings, "OPENAI_API_KEY")
 model = get_setting(settings, "MODEL", "qwen3:8b")

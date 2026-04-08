@@ -24,7 +24,7 @@ using AgentFramework.Mem0Integration
 agent = Agent(
     name = "memory-agent",
     instructions = "You are a helpful assistant with memory.",
-    chat_client = OpenAIChatClient(model = "gpt-4o-mini"),
+    client = OpenAIChatClient(model = "gpt-4o-mini"),
     context_providers = [
         Mem0ContextProvider(
             api_key = "your-mem0-api-key",
@@ -168,7 +168,7 @@ provider = Mem0ContextProvider(
 agent = Agent(
     name = "personal-assistant",
     instructions = "You are a personal assistant with long-term memory.",
-    chat_client = OpenAIChatClient(model = "gpt-4o"),
+    client = OpenAIChatClient(model = "gpt-4o"),
     context_providers = [provider],
 )
 
@@ -199,8 +199,12 @@ provider = Mem0ContextProvider(
 ```julia
 try
     response = run_agent(agent, "Hello"; session = session)
-catch e::Mem0Error
-    println("Mem0 error (HTTP ", e.status, "): ", e.message)
-    e.body !== nothing && println("Response body: ", e.body)
+catch e
+    if e isa Mem0Error
+        println("Mem0 error (HTTP ", e.status, "): ", e.message)
+        e.body !== nothing && println("Response body: ", e.body)
+    else
+        rethrow()
+    end
 end
 ```

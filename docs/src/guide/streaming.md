@@ -226,15 +226,15 @@ agent = Agent(
 println("🤖 Starting analysis...")
 stream = run_agent_streaming(agent, "Analyze the sales dataset and explain the findings.")
 
-char_count = 0
+char_count = Ref(0)
 for update in stream
     text = get_text(update)
     if !isempty(text)
         print(text)
-        char_count += length(text)
+        char_count[] += length(text)
     end
 end
-println("\n\n📊 Response: $(char_count) characters")
+println("\n\n📊 Response: $(char_count[]) characters")
 
 response = get_final_response(stream)
 if response !== nothing && response.usage_details !== nothing

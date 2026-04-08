@@ -114,7 +114,7 @@ run_agent(agent, "What's my name?", session=session)
 ```julia
 using SQLite
 
-db = SQLite.DB("history.db")
+db = SQLite.DB(joinpath(storage_dir, "history.db"))
 
 history = DBInterfaceHistoryProvider(
     source_id = "db_history",
@@ -139,7 +139,7 @@ This works with SQLite, PostgreSQL (LibPQ.jl), MySQL (MySQL.jl), and any DBInter
 ```julia
 history = FileHistoryProvider(
     source_id = "file_history",
-    directory = "conversation_history",
+    directory = joinpath(storage_dir, "conversation_history"),
 )
 ```
 
@@ -150,7 +150,7 @@ history = FileHistoryProvider(
 ```julia
 history = RedisHistoryProvider(
     source_id = "redis_history",
-    url = "redis://localhost:6379",
+    conn = (args...) -> nothing,
 )
 ```
 
@@ -165,6 +165,7 @@ Memory stores provide semantic, long-term memory that persists across sessions. 
 ```julia
 record = MemoryRecord(
     id = "mem-001",
+    scope = "session-001",
     content = "Alice prefers metric units.",
     metadata = Dict{String, Any}("source" => "conversation"),
 )
@@ -176,12 +177,12 @@ record = MemoryRecord(
 
 ```julia
 store = InMemoryMemoryStore()
-add_memories!(store, "session-001", [
-    MemoryRecord(content="User prefers dark mode."),
-    MemoryRecord(content="User's name is Alice."),
+add_memories!(store, [
+    MemoryRecord(scope = "session-001", content = "User prefers dark mode."),
+    MemoryRecord(scope = "session-001", content = "User's name is Alice."),
 ])
 
-results = search_memories(store, "session-001", "user preferences")
+results = search_memories(store, "user preferences"; scope = "session-001")
 ```
 
 ### FileMemoryStore
@@ -189,9 +190,9 @@ results = search_memories(store, "session-001", "user preferences")
 [`FileMemoryStore`](@ref) persists memories to JSON files:
 
 ```julia
-store = FileMemoryStore(directory="memories")
-add_memories!(store, "session-001", [
-    MemoryRecord(content="User likes Julia."),
+store = FileMemoryStore(directory = joinpath(storage_dir, "memories"))
+add_memories!(store, [
+    MemoryRecord(scope = "session-001", content = "User likes Julia."),
 ])
 ```
 
@@ -200,9 +201,9 @@ add_memories!(store, "session-001", [
 [`SQLiteMemoryStore`](@ref) stores memories in an SQLite database:
 
 ```julia
-store = SQLiteMemoryStore(db_path="memories.db")
-add_memories!(store, "session-001", [
-    MemoryRecord(content="User is a data scientist."),
+store = SQLiteMemoryStore(joinpath(storage_dir, "memories.db"))
+add_memories!(store, [
+    MemoryRecord(scope = "session-001", content = "User is a data scientist."),
 ])
 ```
 
@@ -211,11 +212,7 @@ add_memories!(store, "session-001", [
 [`RDFMemoryStore`](@ref) stores memories as RDF triples for ontology-aware retrieval:
 
 ```julia
-store = RDFMemoryStore()
-load_ontology!(store, "knowledge.ttl")
-add_memories!(store, "session-001", [
-    MemoryRecord(content="Alice works at Acme Corp."),
-])
+println("RDFMemoryStore examples require RDFLib.jl in the active environment.")
 ```
 
 ### MemoryContextProvider
@@ -224,7 +221,7 @@ add_memories!(store, "session-001", [
 
 ```julia
 memory_provider = MemoryContextProvider(
-    store = SQLiteMemoryStore(db_path="memories.db"),
+    store = SQLiteMemoryStore(joinpath(storage_dir, "memories.db")),
 )
 
 agent = Agent(
@@ -250,11 +247,11 @@ loaded = load_session(store, session.id)
 [`FileSessionStore`](@ref) persists sessions to disk:
 
 ```julia
-store = FileSessionStore(directory="sessions")
+store = FileSessionStore(joinpath(storage_dir, "sessions"))
 save_session!(store, session)
 
 # Later, in a new process
-loaded = load_session(store, "session-001")
+loaded = load_session(store, session.id)
 ```
 
 ### Session Store API
@@ -262,6 +259,7 @@ loaded = load_session(store, "session-001")
 All session stores implement the same interface:
 
 ```julia
+session_id = session.id
 save_session!(store, session)                    # Save a session
 load_session(store, session_id)                  # Load by ID
 delete_session!(store, session_id)               # Delete
@@ -305,6 +303,7 @@ d = session_to_dict(session)
 session = session_from_dict(d)
 
 # Messages
+msg = Message(:user, "Hello")
 d = message_to_dict(msg)
 msg = message_from_dict(d)
 ```
