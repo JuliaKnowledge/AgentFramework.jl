@@ -20,15 +20,13 @@ function AgentFramework._credential_to_token_provider(
     return AzureIdentity.get_bearer_token_provider(credential, scope)
 end
 
-function AgentFramework._check_azure_identity_credential(credential, label::String)
-    credential isa AzureIdentity.AbstractAzureCredential || throw(
-        AgentFramework.ChatClientInvalidAuthError(
-            "$label credential must be an AzureIdentity credential or provide token_provider directly.",
-        ),
-    )
+function AgentFramework._check_azure_identity_credential(
+        credential::AzureIdentity.AbstractAzureCredential, label::String)
+    return nothing
 end
 
-function AgentFramework._get_azure_bearer_token_provider(credential, scope::String)
+function AgentFramework._get_azure_bearer_token_provider(
+        credential::AzureIdentity.AbstractAzureCredential, scope::String)
     return AzureIdentity.get_bearer_token_provider(credential, scope)
 end
 
