@@ -409,6 +409,6 @@ include("hosting/Hosting.jl")
 include("mem0_integration/Mem0Integration.jl")
 include("neo4j_integration/Neo4jIntegration.jl")
 
-export A2A, Bedrock, CodingAgents, Hosting, Mem0Integration, Neo4jIntegration
+export A2A, Bedrock, CodingAgents, Hosting, Mem0Integration, Mem0Cloud, Neo4jIntegration
 
 end # module AgentFramework

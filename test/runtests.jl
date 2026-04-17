@@ -50,6 +50,11 @@ if Base.find_package("AzureIdentity") !== nothing
     include("test_azure_extension.jl")
 end
 
+# Mem0.jl (local) extension test (conditional — only if Mem0.jl is dev'd)
+if Base.find_package("Mem0") !== nothing
+    include("test_local_mem0_ext.jl")
+end
+
 # Submodule tests
 include("test_a2a.jl")
 include("test_bedrock.jl")
