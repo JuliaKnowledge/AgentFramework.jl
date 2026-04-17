@@ -63,6 +63,7 @@ abstract type AbstractExecutor end
 # ─── Source Includes ─────────────────────────────────────────────────────────
 
 include("exceptions.jl")
+include("feature_stage.jl")
 include("content.jl")
 include("messages.jl")
 include("tokenizer.jl")
@@ -393,6 +394,11 @@ export keyword_check, tool_called_check, tool_calls_present, tool_call_args_matc
 export make_evaluator, LocalEvaluator
 export evaluate, evaluate_agent, evaluate_workflow
 export WorkflowAgent
+
+# Feature-stage markers (experimental / release-candidate APIs)
+export @experimental, @release_candidate
+export ExperimentalFeature, ReleaseCandidateFeature
+export feature_stage
 
 # ─── Submodules (consolidated from separate packages) ────────────────────────
 
