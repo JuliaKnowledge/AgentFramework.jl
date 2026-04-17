@@ -50,7 +50,7 @@ const TEST_MODEL = get_test_model()
         @test !isempty(response.text)
         @test length(response.messages) >= 1
         @test response.messages[1].role == :assistant
-        @info "Basic chat response: $(response.text[1:min(100, length(response.text))])"
+        @info "Basic chat response: $(first(response.text, 100))"
     end
 
     @testset "Chat with system message" begin
@@ -72,7 +72,7 @@ const TEST_MODEL = get_test_model()
         @test !isempty(updates)
         response = ChatResponse(updates)
         @test !isempty(response.text)
-        @info "Streaming response: $(response.text[1:min(100, length(response.text))])"
+        @info "Streaming response: $(first(response.text, 100))"
     end
 
     @testset "Agent basic run" begin
@@ -84,7 +84,7 @@ const TEST_MODEL = get_test_model()
         )
         response = run_agent(agent, "What is the capital of France? Answer in one word.")
         @test !isempty(response.text)
-        @info "Agent response: $(response.text[1:min(100, length(response.text))])"
+        @info "Agent response: $(first(response.text, 100))"
     end
 
     @testset "Agent with tools" begin
@@ -116,7 +116,7 @@ const TEST_MODEL = get_test_model()
 
         response = run_agent(agent, "What is 17 + 25?")
         @test !isempty(response.text)
-        @info "Tool agent response: $(response.text[1:min(200, length(response.text))])"
+        @info "Tool agent response: $(first(response.text, 200))"
         end
     end
 
