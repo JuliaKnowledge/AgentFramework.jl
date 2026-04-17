@@ -556,3 +556,10 @@ function load_skills!(provider::SkillsProvider, source::AbstractSkillSource)
     append!(provider.skills, skills)
     return provider
 end
+
+# ── Feature-stage registration ────────────────────────────────────────────────
+# Upstream marks the skills subsystem as experimental (ExperimentalFeature.SKILLS).
+# Register metadata so `feature_stage(Skill)` etc. return the correct tuple.
+for T in (SkillResource, Skill, SkillsProvider)
+    _register_feature_stage(T, :experimental, :SKILLS)
+end

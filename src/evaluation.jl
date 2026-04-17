@@ -1052,3 +1052,9 @@ function run_agent(agent::WorkflowAgent, input=nothing;
 
     return response
 end
+
+# ── Feature-stage registration ────────────────────────────────────────────────
+# Upstream marks the evaluation harness as experimental (ExperimentalFeature.EVALS).
+for T in (AbstractEvaluator, LocalEvaluator)
+    _register_feature_stage(T, :experimental, :EVALS)
+end
