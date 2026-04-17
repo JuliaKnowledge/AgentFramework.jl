@@ -39,7 +39,7 @@ end
 function _request_headers(client::A2AClient; json::Bool=false)::Vector{Pair{String, String}}
     headers = Dict{String, String}(
         "Accept" => "application/json",
-        "User-Agent" => "AgentFrameworkA2A.jl/0.1.0",
+        "User-Agent" => "AgentFramework.jl/A2A/0.1.0",
     )
     json && (headers["Content-Type"] = "application/json")
     merge!(headers, client.headers)

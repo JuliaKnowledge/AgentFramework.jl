@@ -27,6 +27,7 @@ function _known_docs_modules()
     isdefined(AgentFramework, :Hosting) && push!(modules, AgentFramework.Hosting)
     isdefined(AgentFramework, :Mem0Integration) && push!(modules, AgentFramework.Mem0Integration)
     isdefined(AgentFramework, :CodingAgents) && push!(modules, AgentFramework.CodingAgents)
+    isdefined(AgentFramework, :Neo4jIntegration) && push!(modules, AgentFramework.Neo4jIntegration)
     return modules
 end
 
@@ -35,10 +36,12 @@ function _defined_in_docs_modules(type_name::AbstractString)
     return any(isdefined(mod, symbol) for mod in _known_docs_modules())
 end
 
-function _should_eval_block(content::AbstractString)
+function _should_eval_block(content::AbstractString, relpath::AbstractString = "")
     occursin("Pkg.add(", content) && return false
     occursin("using AzureIdentity", content) && return false
     occursin("DefaultAzureCredential(", content) && return false
+    # Neo4j examples need a live Neo4j server; skip evaluation.
+    relpath == "submodules/neo4j.md" && return false
     occursin(r"^\s*\w+\(.*\)\s*->"m, content) && return false
 
     struct_match = match(
@@ -87,7 +90,7 @@ function _rewrite_manual_page(text::String, relpath::AbstractString)
                 j += 1
             end
             content = join(block, "\n")
-            push!(output, _should_eval_block(content) ? "```@example $block_name" : line)
+            push!(output, _should_eval_block(content, relpath) ? "```@example $block_name" : line)
             append!(output, block)
             if j <= length(lines)
                 push!(output, lines[j])
@@ -182,6 +185,7 @@ function build_docs(; deploy::Bool = get(ENV, "CI", nothing) == "true")
                 "A2A Protocol" => "submodules/a2a.md",
                 "Hosting" => "submodules/hosting.md",
                 "Mem0 Integration" => "submodules/mem0.md",
+                "Neo4j Integration" => "submodules/neo4j.md",
                 "Bedrock" => "submodules/bedrock.md",
                 "Coding Agents" => "submodules/coding_agents.md",
             ],
