@@ -189,6 +189,12 @@ function build_docs(; deploy::Bool = get(ENV, "CI", nothing) == "true")
                 "Bedrock" => "submodules/bedrock.md",
                 "Coding Agents" => "submodules/coding_agents.md",
             ],
+            "Vignettes" => [
+                "Copilot × AgentFramework" => "vignettes/copilot_with_agentframework.md",
+                "Memory Backends Compared" => "vignettes/memory_backends_compared.md",
+                "Structured Output RAG" => "vignettes/structured_output_rag.md",
+                "LLMWiki as a Tool" => "vignettes/llmwiki_as_tool.md",
+            ],
         ],
         warnonly = [:missing_docs, :cross_references, :docs_block],
     ),
