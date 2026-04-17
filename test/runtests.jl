@@ -55,6 +55,7 @@ include("test_bedrock.jl")
 include("test_coding_agents.jl")
 include("test_hosting.jl")
 include("test_mem0_integration.jl")
+include("test_neo4j.jl")
 
 # Integration tests (require Ollama running)
 if get(ENV, "AGENTFRAMEWORK_INTEGRATION", "false") == "true"
