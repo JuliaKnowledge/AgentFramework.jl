@@ -71,7 +71,7 @@ Available builder functions:
 | [`with_instructions`](@ref) | Replace system instructions |
 | [`with_tools`](@ref) | Replace the tool set |
 | [`with_name`](@ref) | Change the agent name |
-| [`with_options`](@ref) | Override default [`ChatOptions`](@ref) |
+| [`with_options`](@ref) | Override default `ChatOptions` |
 
 ## Running Agents
 
@@ -100,7 +100,7 @@ response = run_agent(agent, "What was the code?", session=session)
 
 ### Streaming Execution
 
-[`run_agent_streaming`](@ref) returns a [`ResponseStream`](@ref) that yields [`AgentResponseUpdate`](@ref) items as they arrive:
+[`run_agent_streaming`](@ref) returns a [`ResponseStream`](@ref) that yields `AgentResponseUpdate` items as they arrive:
 
 ```julia
 stream = run_agent_streaming(agent, "Write a haiku about Julia.")
@@ -113,7 +113,7 @@ println()
 final = get_final_response(stream)
 ```
 
-See the [Streaming](@ref) guide for more details.
+See the [Streaming](streaming.md) guide for more details.
 
 ### Structured Output
 
@@ -155,7 +155,7 @@ response.conversation_id   # String — provider conversation/session ID
 
 ## AgentResponseUpdate
 
-[`AgentResponseUpdate`](@ref) is yielded during streaming:
+`AgentResponseUpdate` is yielded during streaming:
 
 ```julia
 stream = run_agent_streaming(agent, "Hello!")
@@ -242,6 +242,6 @@ See the [Sessions & Memory](@ref) guide for details on session persistence and m
 
 ## Next Steps
 
-- [Tools](@ref) — Learn how to define and configure tools
-- [Middleware](@ref) — Add interception logic around agent, chat, and tool calls
-- [Workflows](@ref) — Orchestrate multiple agents in complex pipelines
+- [Tools](tools.md) — Learn how to define and configure tools
+- [Middleware](middleware.md) — Add interception logic around agent, chat, and tool calls
+- [Workflows](workflows.md) — Orchestrate multiple agents in complex pipelines

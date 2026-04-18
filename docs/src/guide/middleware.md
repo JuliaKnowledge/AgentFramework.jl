@@ -308,5 +308,5 @@ result = apply_chat_middleware([mw1, mw2], ctx, handler)
 ## Next Steps
 
 - [Sessions & Memory](@ref) — Context providers that work alongside middleware
-- [Agents](@ref) — How middleware integrates into the agent execution pipeline
-- [Streaming](@ref) — Middleware behavior during streaming
+- [Agents](agents.md) — How middleware integrates into the agent execution pipeline
+- [Streaming](streaming.md) — Middleware behavior during streaming

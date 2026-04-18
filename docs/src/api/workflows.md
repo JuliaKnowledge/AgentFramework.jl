@@ -10,20 +10,12 @@ executors until the workflow reaches a terminal state.
 ```@docs
 AgentFramework.WorkflowMessage
 AgentFramework.WorkflowMessageType
-AgentFramework.STANDARD_MESSAGE
-AgentFramework.RESPONSE_MESSAGE
 ```
 
 ## Run State
 
 ```@docs
 AgentFramework.WorkflowRunState
-AgentFramework.WF_STARTED
-AgentFramework.WF_IN_PROGRESS
-AgentFramework.WF_IDLE
-AgentFramework.WF_IDLE_WITH_PENDING_REQUESTS
-AgentFramework.WF_FAILED
-AgentFramework.WF_CANCELLED
 ```
 
 ## Events
@@ -38,19 +30,7 @@ AgentFramework.WorkflowRunResult
 ### Event Type Constants
 
 ```@docs
-AgentFramework.EVT_STARTED
-AgentFramework.EVT_STATUS
-AgentFramework.EVT_FAILED
-AgentFramework.EVT_OUTPUT
-AgentFramework.EVT_DATA
-AgentFramework.EVT_REQUEST_INFO
-AgentFramework.EVT_WARNING
-AgentFramework.EVT_ERROR
-AgentFramework.EVT_SUPERSTEP_STARTED
-AgentFramework.EVT_SUPERSTEP_COMPLETED
-AgentFramework.EVT_EXECUTOR_INVOKED
-AgentFramework.EVT_EXECUTOR_COMPLETED
-AgentFramework.EVT_EXECUTOR_FAILED
+
 ```
 
 ### Event Factory Functions
@@ -113,9 +93,6 @@ AgentFramework.get_conversation
 
 ```@docs
 AgentFramework.EdgeKind
-AgentFramework.DIRECT_EDGE
-AgentFramework.FAN_OUT_EDGE
-AgentFramework.FAN_IN_EDGE
 AgentFramework.Edge
 AgentFramework.EdgeGroup
 AgentFramework.direct_edge
@@ -140,7 +117,7 @@ AgentFramework.add_fan_out
 AgentFramework.add_fan_in
 AgentFramework.add_switch
 AgentFramework.add_output
-AgentFramework.build
+AgentFramework.build(::AgentFramework.WorkflowBuilder)
 ```
 
 ### Convenience Builders
@@ -200,14 +177,6 @@ AgentFramework.FileCheckpointStorage
 
 ```@docs
 AgentFramework.ValidationCheck
-AgentFramework.ALL_CHECKS
-AgentFramework.CHECK_TYPE_COMPATIBILITY
-AgentFramework.CHECK_EDGE_DUPLICATION
-AgentFramework.CHECK_EXECUTOR_DUPLICATION
-AgentFramework.CHECK_GRAPH_CONNECTIVITY
-AgentFramework.CHECK_SELF_LOOPS
-AgentFramework.CHECK_OUTPUT_EXECUTORS
-AgentFramework.CHECK_DEAD_ENDS
 AgentFramework.ValidationIssue
 AgentFramework.FullValidationResult
 AgentFramework.validate_workflow

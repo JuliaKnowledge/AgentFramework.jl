@@ -99,6 +99,6 @@ end
 
 * [`CopilotSDK.jl/examples/basic_session.jl`](https://github.com/JuliaKnowledge/CopilotSDK.jl/blob/main/examples/basic_session.jl)
   — the SDK-level session vignette (no AF).
-* [Agents guide](@ref) — the `AbstractAgent` contract CopilotAgent implements.
+* [Agents guide](agents.md) — the `AbstractAgent` contract CopilotAgent implements.
 * [CopilotSDK hooks guide](https://github.com/JuliaKnowledge/CopilotSDK.jl/blob/main/docs/src/guide/hooks.md)
   — run user code on every session event, orthogonal to AF middleware.

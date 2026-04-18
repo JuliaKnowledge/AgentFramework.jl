@@ -461,7 +461,7 @@ api_key = get_secret(settings, "OPENAI_API_KEY")
 model = get_setting(settings, "MODEL", "qwen3:8b")
 ```
 
-[`SecretString`](@ref) wraps sensitive values to prevent accidental logging.
+`SecretString` wraps sensitive values to prevent accidental logging.
 
 ## Structured Output
 
@@ -490,5 +490,5 @@ println(recipe.ingredients)
 ## Next Steps
 
 - [API Reference](../api/agents.md) — Complete API documentation for all types and functions
-- [Workflows](@ref) — Multi-agent orchestration patterns
+- [Workflows](workflows.md) — Multi-agent orchestration patterns
 - [Providers](@ref) — Provider-specific advanced features

@@ -195,8 +195,8 @@ end
 
 ## Next Steps
 
-- [Agents](@ref) — Learn about agent types, the builder pattern, and structured output
-- [Tools](@ref) — Deep dive into tool schemas, invocation lifecycle, and advanced options
-- [Middleware](@ref) — Add logging, retry logic, and custom interception
-- [Streaming](@ref) — Get real-time token-by-token output
+- [Agents](agents.md) — Learn about agent types, the builder pattern, and structured output
+- [Tools](tools.md) — Deep dive into tool schemas, invocation lifecycle, and advanced options
+- [Middleware](middleware.md) — Add logging, retry logic, and custom interception
+- [Streaming](streaming.md) — Get real-time token-by-token output
 - [Providers](@ref) — Configure OpenAI, Azure, Anthropic, and other LLM providers

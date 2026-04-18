@@ -394,6 +394,6 @@ end
 
 ## Next Steps
 
-- [Agents](@ref) — Create agents to use as workflow executors
-- [Streaming](@ref) — Stream workflow events in real time
+- [Agents](agents.md) — Create agents to use as workflow executors
+- [Streaming](streaming.md) — Stream workflow events in real time
 - [Advanced Topics](@ref) — Declarative workflows from YAML/JSON

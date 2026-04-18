@@ -310,6 +310,6 @@ msg = message_from_dict(d)
 
 ## Next Steps
 
-- [Workflows](@ref) — Multi-agent orchestration with shared state
+- [Workflows](workflows.md) — Multi-agent orchestration with shared state
 - [Advanced Topics](@ref) — Message compaction strategies for long conversations
 - [Providers](@ref) — Provider-managed sessions and thread IDs

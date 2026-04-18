@@ -90,24 +90,24 @@ Learn how to use AgentFramework.jl step by step:
 | Section | Description |
 |:--------|:------------|
 | [Getting Started](@ref) | Installation, prerequisites, and your first agent |
-| [Agents](@ref) | Agent types, builder pattern, and running agents |
-| [Tools](@ref) | The `@tool` macro, schemas, and tool invocation |
-| [Middleware](@ref) | Three-layer middleware pipeline for interception |
+| [Agents](agents.md) | Agent types, builder pattern, and running agents |
+| [Tools](tools.md) | The `@tool` macro, schemas, and tool invocation |
+| [Middleware](middleware.md) | Three-layer middleware pipeline for interception |
 | [Sessions & Memory](@ref) | Conversation state, history providers, and memory stores |
-| [Workflows](@ref) | Multi-agent orchestration with DAG-based workflows |
+| [Workflows](workflows.md) | Multi-agent orchestration with DAG-based workflows |
 | [Providers](@ref) | LLM provider configuration and capabilities |
-| [Streaming](@ref) | Real-time streaming responses |
+| [Streaming](streaming.md) | Real-time streaming responses |
 | [Advanced Topics](@ref) | Declarative agents, MCP, compaction, evaluation, and more |
 
 ## Submodules
 
 AgentFramework.jl includes several integrated submodules for extended functionality:
 
-- **[`A2A`](@ref)** — Agent-to-Agent protocol for REST-based inter-agent communication
+- **`A2A`** — Agent-to-Agent protocol for REST-based inter-agent communication
 - **[`Hosting`](@ref)** — Deploy agents as HTTP services
-- **[`Mem0Integration`](@ref)** — Long-term memory via Mem0
+- **`Mem0Integration`** — Long-term memory via Mem0
 - **[`Bedrock`](@ref)** — AWS Bedrock provider support
-- **[`CodingAgents`](@ref)** — Specialized agents for code generation and editing
+- **`CodingAgents`** — Specialized agents for code generation and editing
 
 ## API Reference
 

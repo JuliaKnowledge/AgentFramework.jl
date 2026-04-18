@@ -117,7 +117,7 @@ your data.
 
 ## See also
 
-* [`Mem0Integration`](@ref) — the built-in AF integration using Mem0's
+* `Mem0Integration` — the built-in AF integration using Mem0's
   cloud API or self-hosted server.
 * [`MemoryContextProvider`](@ref) — the generic vector-memory provider
   that works with **any** `AbstractMemoryStore` (including

@@ -17,16 +17,7 @@ AgentFramework.ContentType
 ## Content Type Constants
 
 ```@docs
-AgentFramework.TEXT
-AgentFramework.TEXT_REASONING
-AgentFramework.ERROR_CONTENT
-AgentFramework.URI
-AgentFramework.DATA
-AgentFramework.HOSTED_FILE
-AgentFramework.FUNCTION_CALL
-AgentFramework.FUNCTION_RESULT
-AgentFramework.USAGE
-AgentFramework.HOSTED_VECTOR_STORE
+
 ```
 
 ## Factory Functions

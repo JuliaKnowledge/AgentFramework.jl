@@ -142,7 +142,7 @@ client = FoundryChatClient(
 
 ## ChatOptions
 
-[`ChatOptions`](@ref) configure individual LLM requests:
+`ChatOptions` configure individual LLM requests:
 
 ```julia
 options = ChatOptions(
@@ -307,6 +307,6 @@ options = ChatOptions(
 
 ## Next Steps
 
-- [Streaming](@ref) — Detailed streaming patterns with different providers
-- [Agents](@ref) — How agents use providers via the chat client abstraction
+- [Streaming](streaming.md) — Detailed streaming patterns with different providers
+- [Agents](agents.md) — How agents use providers via the chat client abstraction
 - [Advanced Topics](@ref) — FoundryEmbeddingClient and embedding generation

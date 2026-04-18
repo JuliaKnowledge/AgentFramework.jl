@@ -78,5 +78,5 @@ verifiable source.
   works with any `AbstractMemoryStore`.
 * [MemPalace.jl](https://github.com/JuliaKnowledge/MemPalace.jl) — the
   verbatim palace used here.
-* [Structured Output guide](@ref) — `response_format_for`,
+* `Structured Output` guide — `response_format_for`,
   `schema_from_type`, `parse_structured`.

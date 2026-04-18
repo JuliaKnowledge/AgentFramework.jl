@@ -411,4 +411,7 @@ include("neo4j_integration/Neo4jIntegration.jl")
 
 export A2A, Bedrock, CodingAgents, Hosting, Mem0Integration, Mem0Cloud, Neo4jIntegration
 
+# Auto-attached docstrings for previously undocumented public exports.
+include("_docstrings.jl")
+
 end # module AgentFramework

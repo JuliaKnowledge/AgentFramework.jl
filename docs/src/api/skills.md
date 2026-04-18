@@ -33,7 +33,7 @@ AgentFramework.add_skills!
 AgentFramework.add_source!
 AgentFramework.deduplicate!
 AgentFramework.filter_by!
-AgentFramework.build
+AgentFramework.build(::AgentFramework.SkillSourceBuilder)
 AgentFramework.load_skills!
 AgentFramework.get_skills
 ```

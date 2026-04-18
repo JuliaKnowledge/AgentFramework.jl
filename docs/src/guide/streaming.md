@@ -6,7 +6,7 @@ Streaming lets you display LLM output in real time as tokens arrive, rather than
 
 There are two levels of streaming in AgentFramework.jl:
 
-1. **Agent-level streaming** via [`run_agent_streaming`](@ref) — yields [`AgentResponseUpdate`](@ref) items
+1. **Agent-level streaming** via [`run_agent_streaming`](@ref) — yields `AgentResponseUpdate` items
 2. **Chat client-level streaming** via [`get_response_streaming`](@ref) — yields [`ChatResponseUpdate`](@ref) items
 
 Most users will use agent-level streaming, which handles the tool execution loop automatically.
@@ -60,7 +60,7 @@ end
 
 ## AgentResponseUpdate
 
-Each [`AgentResponseUpdate`](@ref) contains a chunk of the response:
+Each `AgentResponseUpdate` contains a chunk of the response:
 
 ```julia
 stream = run_agent_streaming(agent, "Hello!")
@@ -245,10 +245,10 @@ end
 
 ## Workflow Streaming
 
-Workflows also support streaming via event channels. See the [Workflows](@ref) guide for details on streaming [`WorkflowEvent`](@ref) items during multi-agent orchestration.
+Workflows also support streaming via event channels. See the [Workflows](workflows.md) guide for details on streaming [`WorkflowEvent`](@ref) items during multi-agent orchestration.
 
 ## Next Steps
 
-- [Agents](@ref) — Agent configuration that affects streaming behavior
+- [Agents](agents.md) — Agent configuration that affects streaming behavior
 - [Providers](@ref) — Provider-specific streaming capabilities
-- [Middleware](@ref) — How middleware interacts with streaming
+- [Middleware](middleware.md) — How middleware interacts with streaming

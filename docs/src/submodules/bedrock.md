@@ -180,7 +180,7 @@ response = run_agent(agent, "What's the weather in Seattle?")
 
 ### ChatOptions
 
-Standard [`ChatOptions`](@ref) are mapped to Bedrock parameters:
+Standard `ChatOptions` are mapped to Bedrock parameters:
 
 | ChatOptions field | Bedrock parameter |
 |-------------------|-------------------|

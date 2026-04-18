@@ -146,7 +146,7 @@ LLM Response (with tool call)
     └─ 7. Send back: add function_result_content to messages, loop to LLM
 ```
 
-You can intercept step 4 with function middleware (see [Middleware](@ref)).
+You can intercept step 4 with function middleware (see [Middleware](middleware.md)).
 
 ### Direct Invocation
 
@@ -279,6 +279,6 @@ tools = normalize_tools([get_weather, calculate])
 
 ## Next Steps
 
-- [Middleware](@ref) — Intercept tool invocations with function middleware
-- [Agents](@ref) — Learn how agents use tools in the execution loop
+- [Middleware](middleware.md) — Intercept tool invocations with function middleware
+- [Agents](agents.md) — Learn how agents use tools in the execution loop
 - [Advanced Topics](@ref) — MCP integration for connecting external tool servers

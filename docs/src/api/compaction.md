@@ -9,13 +9,6 @@ values in sequence.
 
 ```@docs
 AgentFramework.CompactionStrategy
-AgentFramework.NO_COMPACTION
-AgentFramework.SUMMARIZE_OLDEST
-AgentFramework.DROP_OLDEST
-AgentFramework.SLIDING_WINDOW
-AgentFramework.TRUNCATE
-AgentFramework.SELECTIVE_TOOL_CALL
-AgentFramework.TOOL_RESULT_ONLY
 ```
 
 ## Configuration

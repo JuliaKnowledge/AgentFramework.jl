@@ -24,11 +24,6 @@ AgentFramework.ChatResponseUpdate
 
 ```@docs
 AgentFramework.FinishReason
-AgentFramework.STOP
-AgentFramework.LENGTH
-AgentFramework.TOOL_CALLS
-AgentFramework.CONTENT_FILTER
-AgentFramework.FINISH_ERROR
 ```
 
 ## Streaming

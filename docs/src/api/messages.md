@@ -15,10 +15,7 @@ AgentFramework.Role
 ## Role Constants
 
 ```@docs
-AgentFramework.ROLE_ASSISTANT
-AgentFramework.ROLE_SYSTEM
-AgentFramework.ROLE_USER
-AgentFramework.ROLE_TOOL
+
 ```
 
 ## Agent Run Inputs
