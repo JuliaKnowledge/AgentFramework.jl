@@ -1,10 +1,14 @@
 [deps]
 AgentFramework = "8d84e483-4b84-4e3c-9ca2-3749d621083b"
+AzureIdentity = "1b7b9afa-6387-4f08-b495-223719ee650f"
 Documenter = "e30172f5-a6a5-5a46-863b-614d45cd2de4"
+Mem0 = "111c52c1-a189-4018-bb23-b883ef531b41"
 SQLite = "0aa819cd-b072-5ff4-a722-6bc24af294d9"
 
 [sources]
 AgentFramework = {path = ".."}
+AzureIdentity = {url = "https://github.com/JuliaKnowledge/AzureIdentity.jl"}
+Mem0 = {url = "https://github.com/JuliaKnowledge/Mem0.jl"}
 
 [compat]
 Documenter = "1"

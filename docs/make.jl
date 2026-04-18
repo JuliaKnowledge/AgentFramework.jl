@@ -141,7 +141,7 @@ function build_docs(; deploy::Bool = get(ENV, "CI", nothing) == "true")
         remotes = nothing,
         format = Documenter.HTML(
             prettyurls = deploy,
-            canonical = "https://sdwfrost.github.io/AgentFramework.jl",
+            canonical = "https://juliaknowledge.github.io/AgentFramework.jl",
             assets = String[],
             size_threshold = 500_000,  # some API pages are large
         ),
@@ -201,7 +201,8 @@ function build_docs(; deploy::Bool = get(ENV, "CI", nothing) == "true")
 
     if deploy
         deploydocs(
-            repo = "github.com/sdwfrost/AgentFramework.jl.git",
+            repo = "github.com/JuliaKnowledge/AgentFramework.jl.git",
+            devbranch = "main",
             push_preview = true,
         )
     end
