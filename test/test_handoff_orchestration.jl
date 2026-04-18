@@ -6,15 +6,15 @@ using Test
 # - a tuple (:handoff, "target_id") — emits a handoff_to_<target> function call
 # - a tuple (:tool, "tool_name", "args") — emits a non-handoff tool call
 # - a Vector of any of the above to emit multiple contents in one message
-mutable struct HandoffMockClient <: AbstractChatClient
+mutable struct HandoffOrchMockClient <: AbstractChatClient
     scripts::Dict{String, Vector{Any}}
     counters::Dict{String, Int}
     received::Vector{Tuple{String, Vector{Message}}}
     name::String
 end
 
-HandoffMockClient(name::String, turns::Vector) =
-    HandoffMockClient(Dict(name => turns), Dict(name => 0), Tuple{String, Vector{Message}}[], name)
+HandoffOrchMockClient(name::String, turns::Vector) =
+    HandoffOrchMockClient(Dict(name => turns), Dict(name => 0), Tuple{String, Vector{Message}}[], name)
 
 function _build_contents(spec)
     if spec isa AbstractString
@@ -39,7 +39,7 @@ function _build_contents(spec)
     error("Unknown script item: $spec")
 end
 
-function AgentFramework.get_response(client::HandoffMockClient, messages::Vector{Message},
+function AgentFramework.get_response(client::HandoffOrchMockClient, messages::Vector{Message},
                                      options::ChatOptions)::ChatResponse
     push!(client.received, (client.name, deepcopy(messages)))
     client.counters[client.name] = get(client.counters, client.name, 0) + 1
@@ -55,7 +55,7 @@ function AgentFramework.get_response(client::HandoffMockClient, messages::Vector
     )
 end
 
-function AgentFramework.get_response_streaming(client::HandoffMockClient, messages::Vector{Message},
+function AgentFramework.get_response_streaming(client::HandoffOrchMockClient, messages::Vector{Message},
                                                options::ChatOptions)::Channel{ChatResponseUpdate}
     response = AgentFramework.get_response(client, messages, options)
     ch = Channel{ChatResponseUpdate}(1)
@@ -72,7 +72,7 @@ function AgentFramework.get_response_streaming(client::HandoffMockClient, messag
 end
 
 make_handoff_agent(name::String, turns::Vector; tools = FunctionTool[]) = begin
-    client = HandoffMockClient(name, turns)
+    client = HandoffOrchMockClient(name, turns)
     Agent(name = name, instructions = "Be concise.", client = client, tools = tools), client
 end
 
