@@ -27,12 +27,15 @@ jobs:
         with:
           version: ${{ matrix.julia-version }}
 
-      - uses: julia-actions/cache@v2
+      - uses: julia-actions/cache@v3
 
       - name: Install AzureIdentity.jl and run tests
         run: >
           julia --project=. -e '
           using Pkg;
-          Pkg.develop(PackageSpec(url="https://github.com/JuliaKnowledge/AzureIdentity.jl"));
+          Pkg.develop([
+            PackageSpec(url="https://github.com/JuliaKnowledge/AzureIdentity.jl"),
+            PackageSpec(url="https://github.com/JuliaKnowledge/Mem0.jl"),
+          ]);
           Pkg.instantiate();
           Pkg.test()'
