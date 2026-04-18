@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1.0"/><title>Providers · AgentFramework.jl</title><meta name="title" content="Providers · AgentFramework.jl"/><meta property="og:title" content="Providers · AgentFramework.jl"/><meta property="twitter:title" content="Providers · AgentFramework.jl"/><meta name="description" content="Documentation for AgentFramework.jl."/><meta property="og:description" content="Documentation for AgentFramework.jl."/><meta property="twitter:description" content="Documentation for AgentFramework.jl."/><meta property="og:url" content="https://juliaknowledge.github.io/AgentFramework.jl/guide/providers/"/><meta property="twitter:url" content="https://juliaknowledge.github.io/AgentFramework.jl/guide/providers/"/><link rel="canonical" href="https://juliaknowledge.github.io/AgentFramework.jl/guide/providers/"/><script data-outdated-warner src="../../assets/warner.js"></script><link href="https://cdnjs.cloudflare.com/ajax/libs/lato-font/3.0.0/css/lato-font.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/juliamono/0.050/juliamono.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/fontawesome.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/solid.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.2/css/brands.min.css" rel="stylesheet" type="text/css"/><link href="https://cdnjs.cloudflare.com/ajax/libs/KaTeX/0.16.8/katex.min.css" rel="stylesheet" type="text/css"/><script>documenterBaseURL="../.."</script><script src="https://cdnjs.cloudflare.com/ajax/libs/require.js/2.3.6/require.min.js" data-main="../../assets/documenter.js"></script><script src="../../search_index.js"></script><script src="../../siteinfo.js"></script><script src="../../../versions.js"></script><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-mocha.css" data-theme-name="catppuccin-mocha"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-macchiato.css" data-theme-name="catppuccin-macchiato"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-frappe.css" data-theme-name="catppuccin-frappe"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/catppuccin-latte.css" data-theme-name="catppuccin-latte"/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-dark.css" data-theme-name="documenter-dark" data-theme-primary-dark/><link class="docs-theme-link" rel="stylesheet" type="text/css" href="../../assets/themes/documenter-light.css" data-theme-name="documenter-light" data-theme-primary/><script src="../../assets/themeswap.js"></script></head><body><div id="documenter"><nav class="docs-sidebar"><div class="docs-package-name"><span class="docs-autofit"><a href="../../">AgentFramework.jl</a></span></div><button class="docs-search-query input is-rounded is-small is-clickable my-2 mx-auto py-1 px-2" id="documenter-search-query">Search docs (Ctrl + /)</button><ul class="docs-menu"><li><a class="tocitem" href="../../">Home</a></li><li><span class="tocitem">Guide</span><ul><li><a class="tocitem" href="../getting_started/">Getting Started</a></li><li><a class="tocitem" href="../agents/">Agents</a></li><li><a class="tocitem" href="../tools/">Tools</a></li><li><a class="tocitem" href="../middleware/">Middleware</a></li><li><a class="tocitem" href="../sessions/">Sessions &amp; Memory</a></li><li><a class="tocitem" href="../workflows/">Workflows</a></li><li class="is-active"><a class="tocitem" href>Providers</a><ul class="internal"><li><a class="tocitem" href="#Provider-Architecture"><span>Provider Architecture</span></a></li><li><a class="tocitem" href="#Built-in-Providers"><span>Built-in Providers</span></a></li><li><a class="tocitem" href="#ChatOptions"><span>ChatOptions</span></a></li><li><a class="tocitem" href="#Capability-System"><span>Capability System</span></a></li><li><a class="tocitem" href="#Implementing-Custom-Providers"><span>Implementing Custom Providers</span></a></li><li><a class="tocitem" href="#Provider-Specific-Features"><span>Provider-Specific Features</span></a></li><li><a class="tocitem" href="#Next-Steps"><span>Next Steps</span></a></li></ul></li><li><a class="tocitem" href="../streaming/">Streaming</a></li><li><a class="tocitem" href="../advanced/">Advanced Topics</a></li></ul></li><li><span class="tocitem">API Reference</span><ul><li><a class="tocitem" href="../../api/agents/">Agents</a></li><li><a class="tocitem" href="../../api/content/">Content</a></li><li><a class="tocitem" href="../../api/messages/">Messages</a></li><li><a class="tocitem" href="../../api/tools/">Tools</a></li><li><a class="tocitem" href="../../api/sessions/">Sessions &amp; Context</a></li><li><a class="tocitem" href="../../api/chat_client/">Chat Client</a></li><li><a class="tocitem" href="../../api/middleware/">Middleware</a></li><li><a class="tocitem" href="../../api/capabilities/">Capabilities</a></li><li><a class="tocitem" href="../../api/resilience/">Resilience</a></li><li><a class="tocitem" href="../../api/structured_output/">Structured Output</a></li><li><a class="tocitem" href="../../api/workflows/">Workflows</a></li><li><a class="tocitem" href="../../api/declarative/">Declarative</a></li><li><a class="tocitem" href="../../api/multimodal/">Multimodal</a></li><li><a class="tocitem" href="../../api/compaction/">Compaction</a></li><li><a class="tocitem" href="../../api/mcp/">MCP</a></li><li><a class="tocitem" href="../../api/evaluation/">Evaluation</a></li><li><a class="tocitem" href="../../api/skills/">Skills</a></li><li><a class="tocitem" href="../../api/handoffs/">Handoffs</a></li><li><a class="tocitem" href="../../api/telemetry/">Telemetry</a></li><li><a class="tocitem" href="../../api/serialization/">Serialization</a></li><li><a class="tocitem" href="../../api/exceptions/">Exceptions</a></li></ul></li><li><span class="tocitem">Submodules</span><ul><li><a class="tocitem" href="../../submodules/a2a/">A2A Protocol</a></li><li><a class="tocitem" href="../../submodules/hosting/">Hosting</a></li><li><a class="tocitem" href="../../submodules/mem0/">Mem0 Integration</a></li><li><a class="tocitem" href="../../submodules/neo4j/">Neo4j Integration</a></li><li><a class="tocitem" href="../../submodules/bedrock/">Bedrock</a></li><li><a class="tocitem" href="../../submodules/coding_agents/">Coding Agents</a></li></ul></li><li><span class="tocitem">Vignettes</span><ul><li><a class="tocitem" href="../../vignettes/copilot_with_agentframework/">Copilot × AgentFramework</a></li><li><a class="tocitem" href="../../vignettes/memory_backends_compared/">Memory Backends Compared</a></li><li><a class="tocitem" href="../../vignettes/structured_output_rag/">Structured Output RAG</a></li><li><a class="tocitem" href="../../vignettes/llmwiki_as_tool/">LLMWiki as a Tool</a></li></ul></li></ul><div class="docs-version-selector field has-addons"><div class="control"><span class="docs-label button is-static is-size-7">Version</span></div><div class="docs-selector control is-expanded"><div class="select is-fullwidth is-size-7"><select id="documenter-version-selector"></select></div></div></div></nav><div class="docs-main"><header class="docs-navbar"><a class="docs-sidebar-button docs-navbar-link fa-solid fa-bars is-hidden-desktop" id="documenter-sidebar-button" href="#"></a><nav class="breadcrumb"><ul class="is-hidden-mobile"><li><a class="is-disabled">Guide</a></li><li class="is-active"><a href>Providers</a></li></ul><ul class="is-hidden-tablet"><li class="is-active"><a href>Providers</a></li></ul></nav><div class="docs-right"><a class="docs-settings-button docs-navbar-link fa-solid fa-gear" id="documenter-settings-button" href="#" title="Settings"></a><a class="docs-article-toggle-button fa-solid fa-chevron-up" id="documenter-article-toggle-button" href="javascript:;" title="Collapse all docstrings"></a></div></header><article class="content" id="documenter-page"><h1 id="Providers"><a class="docs-heading-anchor" href="#Providers">Providers</a><a id="Providers-1"></a><a class="docs-heading-anchor-permalink" href="#Providers" title="Permalink"></a></h1><p>Providers are the LLM backends that agents communicate with. Each provider implements the <a href="../../api/chat_client/#AgentFramework.AbstractChatClient"><code>AbstractChatClient</code></a> interface, translating AgentFramework.jl&#39;s message format to and from the provider&#39;s API.</p><h2 id="Provider-Architecture"><a class="docs-heading-anchor" href="#Provider-Architecture">Provider Architecture</a><a id="Provider-Architecture-1"></a><a class="docs-heading-anchor-permalink" href="#Provider-Architecture" title="Permalink"></a></h2><p>All providers subtype <a href="../../api/chat_client/#AgentFramework.AbstractChatClient"><code>AbstractChatClient</code></a> and implement two methods:</p><pre><code class="language-julia hljs">get_response(client::AbstractChatClient, messages::Vector{Message}, options::ChatOptions) -&gt; ChatResponse
+get_response_streaming(client::AbstractChatClient, messages::Vector{Message}, options::ChatOptions) -&gt; Channel{ChatResponseUpdate}</code></pre><p>This abstraction means agents are provider-agnostic — you can swap providers without changing agent code.</p><h2 id="Built-in-Providers"><a class="docs-heading-anchor" href="#Built-in-Providers">Built-in Providers</a><a id="Built-in-Providers-1"></a><a class="docs-heading-anchor-permalink" href="#Built-in-Providers" title="Permalink"></a></h2><h3 id="OllamaChatClient"><a class="docs-heading-anchor" href="#OllamaChatClient">OllamaChatClient</a><a id="OllamaChatClient-1"></a><a class="docs-heading-anchor-permalink" href="#OllamaChatClient" title="Permalink"></a></h3><p><a href="#OllamaChatClient"><code>OllamaChatClient</code></a> connects to a local <a href="https://ollama.com">Ollama</a> instance via its OpenAI-compatible API. This is the easiest way to get started — no API keys needed.</p><pre><code class="language-julia hljs">using AgentFramework
+
+client = OllamaChatClient(
+    model = &quot;qwen3:8b&quot;,                           # Required: Ollama model name
+    base_url = &quot;http://localhost:11434&quot;,            # Default Ollama URL
+    options = Dict{String, Any}(&quot;num_ctx&quot; =&gt; 8192), # Ollama-specific options
+    read_timeout = 300,                             # Timeout in seconds
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">OllamaChatClient(&quot;qwen3:8b&quot;)</code></pre><p><strong>Prerequisites:</strong> Install Ollama and pull a model:</p><pre><code class="language-bash hljs">ollama pull qwen3:8b</code></pre><h3 id="OpenAIChatClient"><a class="docs-heading-anchor" href="#OpenAIChatClient">OpenAIChatClient</a><a id="OpenAIChatClient-1"></a><a class="docs-heading-anchor-permalink" href="#OpenAIChatClient" title="Permalink"></a></h3><p><a href="#OpenAIChatClient"><code>OpenAIChatClient</code></a> works with the standard OpenAI API and any OpenAI-compatible endpoint (vLLM, LM Studio, Together AI, etc.):</p><pre><code class="language-julia hljs">client = OpenAIChatClient(
+    model = &quot;gpt-4o&quot;,                              # Model name
+    api_key = &quot;&quot;,                                   # Falls back to ENV[&quot;OPENAI_API_KEY&quot;]
+    base_url = &quot;https://api.openai.com/v1&quot;,        # Override for compatible APIs
+    organization = nothing,                         # Optional org ID
+    read_timeout = 120,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">OpenAIChatClient(&quot;gpt-4o&quot;)</code></pre><p><strong>Using with OpenAI-compatible services:</strong></p><pre><code class="language-julia hljs"># vLLM
+client = OpenAIChatClient(
+    model = &quot;meta-llama/Llama-3-8b&quot;,
+    base_url = &quot;http://localhost:8000/v1&quot;,
+    api_key = &quot;not-needed&quot;,
+)
+
+# LM Studio
+client = OpenAIChatClient(
+    model = &quot;local-model&quot;,
+    base_url = &quot;http://localhost:1234/v1&quot;,
+    api_key = &quot;lm-studio&quot;,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">OpenAIChatClient(&quot;local-model&quot;)</code></pre><h3 id="AzureOpenAIChatClient"><a class="docs-heading-anchor" href="#AzureOpenAIChatClient">AzureOpenAIChatClient</a><a id="AzureOpenAIChatClient-1"></a><a class="docs-heading-anchor-permalink" href="#AzureOpenAIChatClient" title="Permalink"></a></h3><p><a href="#AzureOpenAIChatClient"><code>AzureOpenAIChatClient</code></a> connects to Azure OpenAI Service:</p><pre><code class="language-julia hljs">client = AzureOpenAIChatClient(
+    model = &quot;gpt-4o&quot;,                                        # Deployment name
+    endpoint = &quot;https://myresource.openai.azure.com&quot;,        # Azure endpoint
+    api_key = &quot;&quot;,                                             # Falls back to ENV[&quot;AZURE_OPENAI_API_KEY&quot;]
+    api_version = &quot;2024-06-01&quot;,                               # API version
+    read_timeout = 120,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">AzureOpenAIChatClient(&quot;gpt-4o&quot;)</code></pre><p><strong>With Azure Identity (Entra ID / managed identity):</strong></p><pre><code class="language-julia hljs">using AzureIdentity
+
+client = AzureOpenAIChatClient(
+    model = &quot;gpt-4o&quot;,
+    endpoint = &quot;https://myresource.openai.azure.com&quot;,
+    credential = DefaultAzureCredential(),
+)</code></pre><p>You can also supply a custom <code>token_provider</code> function:</p><pre><code class="language-julia hljs">client = AzureOpenAIChatClient(
+    model = &quot;gpt-4o&quot;,
+    endpoint = &quot;https://myresource.openai.azure.com&quot;,
+    token_provider = () -&gt; get_my_token(),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">AzureOpenAIChatClient(&quot;gpt-4o&quot;)</code></pre><h3 id="AnthropicChatClient"><a class="docs-heading-anchor" href="#AnthropicChatClient">AnthropicChatClient</a><a id="AnthropicChatClient-1"></a><a class="docs-heading-anchor-permalink" href="#AnthropicChatClient" title="Permalink"></a></h3><p><a href="#AnthropicChatClient"><code>AnthropicChatClient</code></a> connects to Anthropic&#39;s Claude Messages API:</p><pre><code class="language-julia hljs">client = AnthropicChatClient(
+    model = &quot;claude-sonnet-4-20250514&quot;,            # Model name
+    api_key = &quot;&quot;,                                   # Falls back to ENV[&quot;ANTHROPIC_API_KEY&quot;]
+    base_url = &quot;https://api.anthropic.com&quot;,
+    api_version = &quot;2023-06-01&quot;,                     # Anthropic API version header
+    read_timeout = 120,
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">AnthropicChatClient(&quot;claude-sonnet-4-20250514&quot;)</code></pre><h3 id="FoundryChatClient"><a class="docs-heading-anchor" href="#FoundryChatClient">FoundryChatClient</a><a id="FoundryChatClient-1"></a><a class="docs-heading-anchor-permalink" href="#FoundryChatClient" title="Permalink"></a></h3><p><a href="#FoundryChatClient"><code>FoundryChatClient</code></a> connects to Microsoft Foundry project endpoints:</p><pre><code class="language-julia hljs">using AzureIdentity
+
+client = FoundryChatClient(
+    model = &quot;gpt-4o&quot;,                              # Deployment name
+    project_endpoint = &quot;https://my-project.api.azureml.ms&quot;,
+    credential = DefaultAzureCredential(),
+)</code></pre><p>Or with environment variables:</p><pre><code class="language-julia hljs"># Set FOUNDRY_MODEL and FOUNDRY_PROJECT_ENDPOINT
+client = FoundryChatClient(
+    credential = DefaultAzureCredential(),
+)</code></pre><h2 id="ChatOptions"><a class="docs-heading-anchor" href="#ChatOptions">ChatOptions</a><a id="ChatOptions-1"></a><a class="docs-heading-anchor-permalink" href="#ChatOptions" title="Permalink"></a></h2><p><code>ChatOptions</code> configure individual LLM requests:</p><pre><code class="language-julia hljs">options = ChatOptions(
+    model = nothing,              # Override model for this request
+    temperature = 0.7,            # Sampling temperature (0.0–2.0)
+    top_p = 0.9,                  # Nucleus sampling parameter
+    max_tokens = 1000,            # Maximum response tokens
+    stop = [&quot;END&quot;],               # Stop sequences
+    tools = FunctionTool[],       # Tools for this request (usually set by agent)
+    tool_choice = &quot;auto&quot;,         # &quot;auto&quot;, &quot;none&quot;, &quot;required&quot;, or a function name
+    response_format = nothing,    # Structured output format
+    additional = Dict{String, Any}(), # Provider-specific options
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ChatOptions(nothing, 0.7, 0.9, 1000, [&quot;END&quot;], FunctionTool[], &quot;auto&quot;, nothing, Dict{String, Any}())</code></pre><p>Pass options per-call or set as agent defaults:</p><pre><code class="language-julia hljs"># Per-call override
+response = run_agent(agent, &quot;Hello&quot;, options=ChatOptions(temperature=0.0))
+
+# Agent defaults
+agent = Agent(
+    client = client,
+    options = ChatOptions(temperature=0.7, max_tokens=2000),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">Agent(&quot;Agent&quot;, 0 tools)</code></pre><p>Options merge with precedence: per-call &gt; agent defaults &gt; provider defaults.</p><h2 id="Capability-System"><a class="docs-heading-anchor" href="#Capability-System">Capability System</a><a id="Capability-System-1"></a><a class="docs-heading-anchor-permalink" href="#Capability-System" title="Permalink"></a></h2><p>AgentFramework.jl uses the <a href="https://www.juliabloggers.com/the-emergent-features-of-julialang-part-ii-traits/">Holy Traits pattern</a> for runtime capability detection:</p><pre><code class="language-julia hljs"># Query capabilities
+supports_streaming(client)          # true/false
+supports_tool_calling(client)       # true/false
+supports_structured_output(client)  # true/false
+supports_embeddings(client)         # true/false
+supports_image_generation(client)   # true/false
+supports_code_interpreter(client)   # true/false
+supports_file_search(client)        # true/false
+supports_web_search(client)         # true/false</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">false</code></pre><h3 id="Available-Capability-Traits"><a class="docs-heading-anchor" href="#Available-Capability-Traits">Available Capability Traits</a><a id="Available-Capability-Traits-1"></a><a class="docs-heading-anchor-permalink" href="#Available-Capability-Traits" title="Permalink"></a></h3><table><tr><th style="text-align: left">Trait</th><th style="text-align: left">Description</th></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasStreaming"><code>HasStreaming</code></a></td><td style="text-align: left">Streaming responses via <code>get_response_streaming</code></td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasToolCalling"><code>HasToolCalling</code></a></td><td style="text-align: left">Function/tool calling support</td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasStructuredOutput"><code>HasStructuredOutput</code></a></td><td style="text-align: left">JSON schema response format</td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasEmbeddings"><code>HasEmbeddings</code></a></td><td style="text-align: left">Text embedding generation</td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasImageGeneration"><code>HasImageGeneration</code></a></td><td style="text-align: left">Image generation</td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasCodeInterpreter"><code>HasCodeInterpreter</code></a></td><td style="text-align: left">Code execution sandbox</td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasFileSearch"><code>HasFileSearch</code></a></td><td style="text-align: left">File search across uploaded documents</td></tr><tr><td style="text-align: left"><a href="../../api/capabilities/#AgentFramework.HasWebSearch"><code>HasWebSearch</code></a></td><td style="text-align: left">Web search integration</td></tr></table><h3 id="Requiring-Capabilities"><a class="docs-heading-anchor" href="#Requiring-Capabilities">Requiring Capabilities</a><a id="Requiring-Capabilities-1"></a><a class="docs-heading-anchor-permalink" href="#Requiring-Capabilities" title="Permalink"></a></h3><pre><code class="language-julia hljs">require_capability(client, streaming_capability, &quot;Streaming required for this operation&quot;)</code></pre><p>This throws an error if the client doesn&#39;t support the capability.</p><h3 id="Listing-Capabilities"><a class="docs-heading-anchor" href="#Listing-Capabilities">Listing Capabilities</a><a id="Listing-Capabilities-1"></a><a class="docs-heading-anchor-permalink" href="#Listing-Capabilities" title="Permalink"></a></h3><pre><code class="language-julia hljs">caps = list_capabilities(client)
+# Vector of Capability instances</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">3-element Vector{Symbol}:
+ :streaming
+ :structured_output
+ :tool_calling</code></pre><h2 id="Implementing-Custom-Providers"><a class="docs-heading-anchor" href="#Implementing-Custom-Providers">Implementing Custom Providers</a><a id="Implementing-Custom-Providers-1"></a><a class="docs-heading-anchor-permalink" href="#Implementing-Custom-Providers" title="Permalink"></a></h2><p>To create a custom provider, subtype <a href="../../api/chat_client/#AgentFramework.AbstractChatClient"><code>AbstractChatClient</code></a> and implement the required methods:</p><pre><code class="language-julia hljs">struct MyCustomClient &lt;: AbstractChatClient
+    api_url::String
+    api_key::String
+end
+
+function AgentFramework.get_response(
+    client::MyCustomClient,
+    messages::Vector{Message},
+    options::ChatOptions,
+)::ChatResponse
+    # 1. Convert messages to your API format
+    api_messages = convert_messages(messages)
+
+    # 2. Make the API call
+    response = HTTP.Response(200, JSON3.write(Dict(&quot;text&quot; =&gt; &quot;Hello from a custom provider&quot;)))
+
+    # 3. Parse the response into a ChatResponse
+    body = JSON3.read(response.body)
+    return ChatResponse(
+        messages = [Message(:assistant, body[&quot;text&quot;])],
+        finish_reason = STOP,
+        model_id = &quot;my-model&quot;,
+    )
+end
+
+function AgentFramework.get_response_streaming(
+    client::MyCustomClient,
+    messages::Vector{Message},
+    options::ChatOptions,
+)::Channel{ChatResponseUpdate}
+    Channel{ChatResponseUpdate}(32) do ch
+        # Stream chunks into the channel
+        for chunk in stream_api_call(client, messages)
+            put!(ch, ChatResponseUpdate(
+                contents = [text_content(chunk.text)],
+            ))
+        end
+        # Final update with finish reason
+        put!(ch, ChatResponseUpdate(finish_reason=STOP))
+    end
+end</code></pre><h3 id="Declaring-Capabilities"><a class="docs-heading-anchor" href="#Declaring-Capabilities">Declaring Capabilities</a><a id="Declaring-Capabilities-1"></a><a class="docs-heading-anchor-permalink" href="#Declaring-Capabilities" title="Permalink"></a></h3><p>Override the trait functions to declare what your provider supports:</p><pre><code class="language-julia hljs">AgentFramework.streaming_capability(::Type{MyCustomClient}) = HasStreaming()
+AgentFramework.tool_calling_capability(::Type{MyCustomClient}) = HasToolCalling()</code></pre><h2 id="Provider-Specific-Features"><a class="docs-heading-anchor" href="#Provider-Specific-Features">Provider-Specific Features</a><a id="Provider-Specific-Features-1"></a><a class="docs-heading-anchor-permalink" href="#Provider-Specific-Features" title="Permalink"></a></h2><h3 id="Ollama-Options"><a class="docs-heading-anchor" href="#Ollama-Options">Ollama Options</a><a id="Ollama-Options-1"></a><a class="docs-heading-anchor-permalink" href="#Ollama-Options" title="Permalink"></a></h3><p>Pass Ollama-specific options via the <code>options</code> field:</p><pre><code class="language-julia hljs">client = OllamaChatClient(
+    model = &quot;qwen3:8b&quot;,
+    options = Dict{String, Any}(
+        &quot;num_ctx&quot; =&gt; 16384,    # Context window size
+        &quot;seed&quot; =&gt; 42,          # Reproducible outputs
+        &quot;num_gpu&quot; =&gt; 1,        # GPU layers
+    ),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">OllamaChatClient(&quot;qwen3:8b&quot;)</code></pre><h3 id="Azure-OpenAI-Data-Sources"><a class="docs-heading-anchor" href="#Azure-OpenAI-Data-Sources">Azure OpenAI Data Sources</a><a id="Azure-OpenAI-Data-Sources-1"></a><a class="docs-heading-anchor-permalink" href="#Azure-OpenAI-Data-Sources" title="Permalink"></a></h3><p>Pass Azure-specific features via <code>ChatOptions.additional</code>:</p><pre><code class="language-julia hljs">options = ChatOptions(
+    additional = Dict{String, Any}(
+        &quot;data_sources&quot; =&gt; [
+            Dict(&quot;type&quot; =&gt; &quot;azure_search&quot;, &quot;parameters&quot; =&gt; Dict(&quot;endpoint&quot; =&gt; &quot;...&quot;))
+        ],
+    ),
+)</code></pre><pre class="documenter-example-output"><code class="nohighlight hljs ansi">ChatOptions(nothing, nothing, nothing, nothing, nothing, FunctionTool[], nothing, nothing, Dict{String, Any}(&quot;data_sources&quot; =&gt; Dict{String, Any}[Dict(&quot;parameters&quot; =&gt; Dict(&quot;endpoint&quot; =&gt; &quot;...&quot;), &quot;type&quot; =&gt; &quot;azure_search&quot;)]))</code></pre><h2 id="Next-Steps"><a class="docs-heading-anchor" href="#Next-Steps">Next Steps</a><a id="Next-Steps-1"></a><a class="docs-heading-anchor-permalink" href="#Next-Steps" title="Permalink"></a></h2><ul><li><a href="../streaming/">Streaming</a> — Detailed streaming patterns with different providers</li><li><a href="../agents/">Agents</a> — How agents use providers via the chat client abstraction</li><li><a href="../advanced/#Advanced-Topics">Advanced Topics</a> — FoundryEmbeddingClient and embedding generation</li></ul></article><nav class="docs-footer"><a class="docs-footer-prevpage" href="../workflows/">« Workflows</a><a class="docs-footer-nextpage" href="../streaming/">Streaming »</a><div class="flexbox-break"></div><p class="footer-message">Powered by <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> and the <a href="https://julialang.org/">Julia Programming Language</a>.</p></nav></div><div class="modal" id="documenter-settings"><div class="modal-background"></div><div class="modal-card"><header class="modal-card-head"><p class="modal-card-title">Settings</p><button class="delete"></button></header><section class="modal-card-body"><p><label class="label">Theme</label><div class="select"><select id="documenter-themepicker"><option value="auto">Automatic (OS)</option><option value="documenter-light">documenter-light</option><option value="documenter-dark">documenter-dark</option><option value="catppuccin-latte">catppuccin-latte</option><option value="catppuccin-frappe">catppuccin-frappe</option><option value="catppuccin-macchiato">catppuccin-macchiato</option><option value="catppuccin-mocha">catppuccin-mocha</option></select></div></p><hr/><p>This document was generated with <a href="https://github.com/JuliaDocs/Documenter.jl">Documenter.jl</a> version 1.17.0 on <span class="colophon-date" title="Saturday 18 April 2026 02:48">Saturday 18 April 2026</span>. Using Julia version 1.11.9.</p></section><footer class="modal-card-foot"></footer></div></div></div></body></html>
