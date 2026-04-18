@@ -1,0 +1,77 @@
+name: Ollama Integration
+
+# Manually-triggered live-LLM smoke test against Ollama. Pulls a small
+# model on the GitHub-hosted runner and exercises OllamaChatClient via
+# the existing AGENTFRAMEWORK_INTEGRATION test path.
+#
+# This workflow is intentionally NOT triggered on push/pull_request to
+# avoid burning runner minutes on every commit. Run it from the Actions
+# tab with "Run workflow", optionally overriding the model.
+
+on:
+  workflow_dispatch:
+    inputs:
+      model:
+        description: "Ollama model tag to pull (must fit in ~14GB runner disk)"
+        required: false
+        default: "qwen2.5:1.5b"
+      julia-version:
+        description: "Julia version"
+        required: false
+        default: "1.11"
+
+jobs:
+  ollama-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    permissions:
+      contents: read
+
+    env:
+      OLLAMA_HOST: http://127.0.0.1:11434
+      AGENTFRAMEWORK_INTEGRATION: "true"
+      AGENTFRAMEWORK_TEST_MODEL: ${{ inputs.model }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ollama
+        run: |
+          curl -fsSL https://ollama.com/install.sh | sh
+          ollama --version
+
+      - name: Start Ollama daemon
+        run: |
+          nohup ollama serve > ollama.log 2>&1 &
+          # Wait for the server to be reachable.
+          for i in $(seq 1 30); do
+            if curl -fsS "${OLLAMA_HOST}/api/tags" > /dev/null 2>&1; then
+              echo "Ollama is up."
+              exit 0
+            fi
+            sleep 1
+          done
+          echo "Ollama failed to start" >&2
+          tail -50 ollama.log >&2 || true
+          exit 1
+
+      - name: Pull model
+        run: ollama pull "${AGENTFRAMEWORK_TEST_MODEL}"
+
+      - uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ inputs.julia-version }}
+
+      - uses: julia-actions/cache@v2
+
+      - name: Run Ollama integration tests
+        run: |
+          julia --project=. -e '
+          using Pkg
+          Pkg.instantiate()
+          include("test/test_ollama_integration.jl")'
+
+      - name: Dump Ollama log on failure
+        if: failure()
+        run: tail -200 ollama.log || true
