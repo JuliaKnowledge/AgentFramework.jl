@@ -89,6 +89,7 @@ include("workflows/checkpoints.jl")
 include("workflows/engine.jl")
 include("workflows/builder.jl")
 include("workflows/orchestrations.jl")
+include("workflows/handoff.jl")
 include("compatibility.jl")
 include("workflows/protocol.jl")
 include("macros.jl")
@@ -284,6 +285,11 @@ export MagenticTaskLedger, MagenticProgressLedgerItem, MagenticProgressLedger, M
 export MagenticPlanReviewRequest, MagenticPlanReviewResponse
 export with_aggregator, with_selection_func, with_termination, with_plan_review
 export magentic_plan, magentic_select, magentic_finalize
+
+# Handoff orchestration
+export HandoffBuilder, HandoffConfiguration, HandoffSentEvent
+export get_handoff_tool_name
+export participants!, add_handoff, with_start_agent, with_autonomous_mode, with_checkpointing
 
 # Protocol introspection
 export ProtocolDescriptor, TypeCompatibilityResult, WorkflowValidationResult
