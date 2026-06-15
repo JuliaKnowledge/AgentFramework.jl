@@ -42,12 +42,12 @@ end
         @test d["call_id"] == "call1"
         @test d["result"] == "Sunny, 22°C"
 
-        # Data content (base64 string payload)
+        # Data content (base64 payload stored as a data-URI in `uri`)
         c = data_content("aGVsbG8=", "image/png")
         d = serialize_to_dict(c)
         @test d["_type"] == "Content"
         @test d["type"] == "data"
-        @test d["text"] == "aGVsbG8="
+        @test d["uri"] == "data:image/png;base64,aGVsbG8="
         @test d["media_type"] == "image/png"
     end
 

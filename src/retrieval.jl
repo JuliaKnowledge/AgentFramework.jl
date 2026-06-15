@@ -63,6 +63,14 @@ function _normalized_role(role)::Symbol
     return role isa Symbol ? role : Symbol(lowercase(string(role)))
 end
 
+function _normalized_kind(kind)::Symbol
+    kind === nothing && return :episodic
+    kind isa Symbol && return kind
+    s = lowercase(strip(string(kind)))
+    isempty(s) && return :episodic
+    return Symbol(s)
+end
+
 function _memory_tokens(text::AbstractString)::Vector{String}
     tokens = split(lowercase(String(text)), r"[^[:alnum:]]+")
     return unique(filter(!isempty, tokens))
@@ -91,8 +99,6 @@ function _json_object(value)::Dict{String, Any}
         return value
     elseif value isa AbstractDict
         return Dict{String, Any}(string(key) => val for (key, val) in pairs(value))
-    elseif value === nothing
-        return Dict{String, Any}()
     end
 
     return Dict{String, Any}()
@@ -171,7 +177,7 @@ function _record_from_dict(data::Dict{String, Any})::MemoryRecord
     return MemoryRecord(
         id = string(get(data, "id", string(UUIDs.uuid4()))),
         scope = string(get(data, "scope", "")),
-        kind = _normalized_role(get(data, "kind", :episodic)),
+        kind = _normalized_kind(get(data, "kind", :episodic)),
         role = _normalized_role(get(data, "role", ROLE_USER)),
         content = string(get(data, "content", "")),
         created_at = _parse_datetime(get(data, "created_at", Dates.now(Dates.UTC))),
@@ -489,7 +495,7 @@ function _sqlite_record_from_row(row)::MemoryRecord
     return MemoryRecord(
         id = string(_row_value(row, :id, 1)),
         scope = string(_row_value(row, :scope, 2)),
-        kind = _normalized_role(_row_value(row, :kind, 3)),
+        kind = _normalized_kind(_row_value(row, :kind, 3)),
         role = _normalized_role(_row_value(row, :role, 4)),
         content = string(_row_value(row, :content, 5)),
         session_id = begin
@@ -814,7 +820,7 @@ function _rdflib_record_from_subject(store::RDFMemoryStore, subject)
     return MemoryRecord(
         id = replace(String(_rdflib_term_text(store, subject)), store.base_uri => ""),
         scope = String(_rdflib_term_text(store, scope)),
-        kind = _normalized_role(_rdflib_term_text(store, store.rdflib.value(store.graph, subject, _rdflib_predicate(store, "kind"); default=store.rdflib.Literal("episodic")))),
+        kind = _normalized_kind(_rdflib_term_text(store, store.rdflib.value(store.graph, subject, _rdflib_predicate(store, "kind"); default=store.rdflib.Literal("episodic")))),
         role = _normalized_role(_rdflib_term_text(store, store.rdflib.value(store.graph, subject, _rdflib_predicate(store, "role"); default=store.rdflib.Literal("user")))),
         content = String(_rdflib_term_text(store, content)),
         created_at = _parse_datetime(_rdflib_term_text(store, store.rdflib.value(store.graph, subject, _rdflib_predicate(store, "createdAt"); default=nothing))),

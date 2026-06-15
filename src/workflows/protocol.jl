@@ -139,52 +139,31 @@ function check_type_compatibility(source::ExecutorSpec, target::ExecutorSpec)::T
     source_sends = source.output_types
     target_accepts = target.input_types
 
+    result(compatible, message) = TypeCompatibilityResult(
+        compatible = compatible,
+        source_id = source.id,
+        target_id = target.id,
+        source_types = copy(source_sends),
+        target_types = copy(target_accepts),
+        message = message,
+    )
+
     # Target accepts Any → always compatible
     if Any in target_accepts
-        return TypeCompatibilityResult(
-            compatible = true,
-            source_id = source.id,
-            target_id = target.id,
-            source_types = copy(source_sends),
-            target_types = copy(target_accepts),
-            message = "Compatible: target '$(target.id)' accepts Any",
-        )
+        return result(true, "Compatible: target '$(target.id)' accepts Any")
     end
 
     # Source sends Any → compatible (can't validate)
     if Any in source_sends
-        return TypeCompatibilityResult(
-            compatible = true,
-            source_id = source.id,
-            target_id = target.id,
-            source_types = copy(source_sends),
-            target_types = copy(target_accepts),
-            message = "Compatible: source '$(source.id)' sends Any (unvalidatable)",
-        )
+        return result(true, "Compatible: source '$(source.id)' sends Any (unvalidatable)")
     end
 
     # Check for at least one overlapping type (subtype relationship)
     has_overlap = any(s -> any(a -> s <: a, target_accepts), source_sends)
-
     if has_overlap
-        return TypeCompatibilityResult(
-            compatible = true,
-            source_id = source.id,
-            target_id = target.id,
-            source_types = copy(source_sends),
-            target_types = copy(target_accepts),
-            message = "Compatible: '$(source.id)' → '$(target.id)'",
-        )
-    else
-        return TypeCompatibilityResult(
-            compatible = false,
-            source_id = source.id,
-            target_id = target.id,
-            source_types = copy(source_sends),
-            target_types = copy(target_accepts),
-            message = "Incompatible: '$(source.id)' sends $(source_sends) but '$(target.id)' accepts $(target_accepts)",
-        )
+        return result(true, "Compatible: '$(source.id)' → '$(target.id)'")
     end
+    return result(false, "Incompatible: '$(source.id)' sends $(source_sends) but '$(target.id)' accepts $(target_accepts)")
 end
 
 # ── Workflow Validation ──────────────────────────────────────────────────────
@@ -194,51 +173,28 @@ end
 
 Validate all edges in a workflow for type compatibility between connected executors.
 """
-function validate_workflow_types(workflow::Workflow)::WorkflowValidationResult
-    errors = TypeCompatibilityResult[]
-    warnings = String[]
-
-    for group in workflow.edge_groups
-        for edge in group.edges
-            source = get(workflow.executors, edge.source_id, nothing)
-            target = get(workflow.executors, edge.target_id, nothing)
-
-            if source === nothing
-                push!(warnings, "Edge references unknown source '$(edge.source_id)'")
-                continue
-            end
-            if target === nothing
-                push!(warnings, "Edge references unknown target '$(edge.target_id)'")
-                continue
-            end
-
-            result = check_type_compatibility(source, target)
-            if !result.compatible
-                push!(errors, result)
-            end
-        end
-    end
-
-    WorkflowValidationResult(
-        valid = isempty(errors),
-        errors = errors,
-        warnings = warnings,
-    )
-end
+validate_workflow_types(workflow::Workflow)::WorkflowValidationResult =
+    _validate_workflow_types(workflow.executors, workflow.edge_groups)
 
 """
     validate_workflow_types(builder::WorkflowBuilder) -> WorkflowValidationResult
 
 Validate all edges in a WorkflowBuilder for type compatibility.
 """
-function validate_workflow_types(builder::WorkflowBuilder)::WorkflowValidationResult
+validate_workflow_types(builder::WorkflowBuilder)::WorkflowValidationResult =
+    _validate_workflow_types(builder.executors, builder.edge_groups)
+
+function _validate_workflow_types(
+    executors::Dict{String, ExecutorSpec},
+    edge_groups::Vector{EdgeGroup},
+)::WorkflowValidationResult
     errors = TypeCompatibilityResult[]
     warnings = String[]
 
-    for group in builder.edge_groups
+    for group in edge_groups
         for edge in group.edges
-            source = get(builder.executors, edge.source_id, nothing)
-            target = get(builder.executors, edge.target_id, nothing)
+            source = get(executors, edge.source_id, nothing)
+            target = get(executors, edge.target_id, nothing)
 
             if source === nothing
                 push!(warnings, "Edge references unknown source '$(edge.source_id)'")

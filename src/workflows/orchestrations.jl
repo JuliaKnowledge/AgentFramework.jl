@@ -201,36 +201,51 @@ function _collect_orchestration_participants(participants::AbstractVector, kind:
     return collected
 end
 
-function _load_stateful_session!(state::Dict{String, Any}, key::String, default_session::AgentSession)::AgentSession
-    store = get!(state, _ORCHESTRATION_SESSION_KEY, Dict{String, Any}())
-    if !(store isa AbstractDict)
-        throw(WorkflowError("Workflow orchestration session store must be a dictionary"))
-    end
-    session_store = store isa Dict{String, Any} ? store : Dict{String, Any}(string(k) => v for (k, v) in pairs(store))
-    state[_ORCHESTRATION_SESSION_KEY] = session_store
-
-    if haskey(session_store, key)
-        raw = session_store[key]
-        if raw isa AgentSession
-            return raw
-        elseif raw isa AbstractDict
-            return session_from_dict(Dict{String, Any}(string(k) => _deserialize_any_value(v) for (k, v) in pairs(raw)))
+function _load_stateful_session!(
+    state::Dict{String, Any},
+    key::String,
+    default_session::AgentSession,
+    state_lock::ReentrantLock = ReentrantLock(),
+)::AgentSession
+    lock(state_lock) do
+        store = get!(state, _ORCHESTRATION_SESSION_KEY, Dict{String, Any}())
+        if !(store isa AbstractDict)
+            throw(WorkflowError("Workflow orchestration session store must be a dictionary"))
         end
-    end
+        session_store = store isa Dict{String, Any} ? store : Dict{String, Any}(string(k) => v for (k, v) in pairs(store))
+        state[_ORCHESTRATION_SESSION_KEY] = session_store
 
-    session = deepcopy(default_session)
-    session_store[key] = session_to_dict(session)
-    return session
+        if haskey(session_store, key)
+            raw = session_store[key]
+            if raw isa AgentSession
+                return raw
+            elseif raw isa AbstractDict
+                # session_from_dict already deserializes typed nested state/metadata.
+                return session_from_dict(Dict{String, Any}(string(k) => v for (k, v) in pairs(raw)))
+            end
+        end
+
+        session = deepcopy(default_session)
+        session_store[key] = session_to_dict(session)
+        return session
+    end
 end
 
-function _save_stateful_session!(state::Dict{String, Any}, key::String, session::AgentSession)
-    store = get!(state, _ORCHESTRATION_SESSION_KEY, Dict{String, Any}())
-    if !(store isa AbstractDict)
-        throw(WorkflowError("Workflow orchestration session store must be a dictionary"))
+function _save_stateful_session!(
+    state::Dict{String, Any},
+    key::String,
+    session::AgentSession,
+    state_lock::ReentrantLock = ReentrantLock(),
+)
+    lock(state_lock) do
+        store = get!(state, _ORCHESTRATION_SESSION_KEY, Dict{String, Any}())
+        if !(store isa AbstractDict)
+            throw(WorkflowError("Workflow orchestration session store must be a dictionary"))
+        end
+        session_store = store isa Dict{String, Any} ? store : Dict{String, Any}(string(k) => v for (k, v) in pairs(store))
+        session_store[key] = session_to_dict(session)
+        state[_ORCHESTRATION_SESSION_KEY] = session_store
     end
-    session_store = store isa Dict{String, Any} ? store : Dict{String, Any}(string(k) => v for (k, v) in pairs(store))
-    session_store[key] = session_to_dict(session)
-    state[_ORCHESTRATION_SESSION_KEY] = session_store
     return session
 end
 
@@ -248,12 +263,14 @@ function _run_orchestration_agent!(
     conversation::Vector{Message},
     state::Dict{String, Any},
     state_key::String,
+    state_lock::ReentrantLock = ReentrantLock(),
 )
     participant_id = _participant_id(participant)
-    session = _load_stateful_session!(state, state_key, _default_participant_session(participant, participant_id))
+    session = _load_stateful_session!(state, state_key, _default_participant_session(participant, participant_id), state_lock)
     agent = participant isa AgentExecutor ? participant.agent : participant
+    # NOTE: run_agent performs blocking I/O and must NOT run under state_lock.
     response = run_agent(agent, conversation; session = session)
-    _save_stateful_session!(state, state_key, session)
+    _save_stateful_session!(state, state_key, session, state_lock)
     full_conversation = vcat(deepcopy(conversation), deepcopy(response.messages))
     if participant isa AgentExecutor
         participant.session = session
@@ -280,32 +297,18 @@ function _last_message_with_role(messages::Vector{Message}, role::Symbol)::Union
     return nothing
 end
 
-function _coerce_concurrent_result(value)::ConcurrentParticipantResult
-    if value isa ConcurrentParticipantResult
-        return value
-    end
+# Return `value` if it is already a `T`; otherwise deserialize it and require the
+# result to be a `T`. Used to recover typed orchestration state from checkpoints.
+function _coerce_state(::Type{T}, value)::T where {T}
+    value isa T && return value
     restored = _deserialize_any_value(value)
-    restored isa ConcurrentParticipantResult || throw(WorkflowError("Expected ConcurrentParticipantResult, got $(typeof(restored))"))
+    restored isa T || throw(WorkflowError("Expected $(nameof(T)), got $(typeof(restored))"))
     return restored
 end
 
-function _coerce_group_chat_state(value)::GroupChatState
-    if value isa GroupChatState
-        return value
-    end
-    restored = _deserialize_any_value(value)
-    restored isa GroupChatState || throw(WorkflowError("Expected GroupChatState, got $(typeof(restored))"))
-    return restored
-end
-
-function _coerce_magentic_context(value)::MagenticContext
-    if value isa MagenticContext
-        return value
-    end
-    restored = _deserialize_any_value(value)
-    restored isa MagenticContext || throw(WorkflowError("Expected MagenticContext, got $(typeof(restored))"))
-    return restored
-end
+_coerce_concurrent_result(value)::ConcurrentParticipantResult = _coerce_state(ConcurrentParticipantResult, value)
+_coerce_group_chat_state(value)::GroupChatState = _coerce_state(GroupChatState, value)
+_coerce_magentic_context(value)::MagenticContext = _coerce_state(MagenticContext, value)
 
 function _coerce_plan_review_response(value)::MagenticPlanReviewResponse
     if value isa MagenticPlanReviewResponse
@@ -364,7 +367,7 @@ function _invoke_concurrent_aggregator(aggregator, results::Vector{ConcurrentPar
         output === nothing || yield_output(ctx, output)
         return nothing
     elseif aggregator isa ExecutorSpec
-        inner = execute_handler(aggregator, results, [ctx.executor_id], ctx._state)
+        inner = execute_handler(aggregator, results, [ctx.executor_id], ctx._state, ctx._state_lock)
         if !isempty(inner._yielded_outputs)
             for output in inner._yielded_outputs
                 yield_output(ctx, output)
@@ -408,6 +411,7 @@ function _group_chat_choice_with_agent!(
     state::GroupChatState,
     workflow_state::Dict{String, Any},
     session_key::String,
+    state_lock::ReentrantLock = ReentrantLock(),
 )::Union{Nothing, String}
     transcript = join(["$(message.role): $(_message_text(message))" for message in state.conversation], "\n")
     prompt = join([
@@ -419,7 +423,7 @@ function _group_chat_choice_with_agent!(
         "Conversation:",
         transcript,
     ], "\n")
-    response, _ = _run_orchestration_agent!(participant, [Message(ROLE_USER, prompt)], workflow_state, session_key)
+    response, _ = _run_orchestration_agent!(participant, [Message(ROLE_USER, prompt)], workflow_state, session_key, state_lock)
     return _parse_participant_choice(response.text, state.participant_ids)
 end
 
@@ -437,7 +441,7 @@ function _sequential_agent_participant(
         output_types = DataType[Vector{Message}],
         yield_types = intermediate_output ? DataType[Vector{Message}] : DataType[],
         handler = (conversation, ctx) -> begin
-            response, full_conversation = _run_orchestration_agent!(participant, deepcopy(conversation), ctx._state, session_key)
+            response, full_conversation = _run_orchestration_agent!(participant, deepcopy(conversation), ctx._state, session_key, ctx._state_lock)
             next_conversation = if chain_only_agent_responses
                 vcat(_assistant_messages(conversation), deepcopy(response.messages))
             else
@@ -463,7 +467,7 @@ function _concurrent_agent_participant(
         output_types = DataType[ConcurrentParticipantResult],
         yield_types = intermediate_output ? DataType[ConcurrentParticipantResult] : DataType[],
         handler = (conversation, ctx) -> begin
-            response, full_conversation = _run_orchestration_agent!(participant, deepcopy(conversation), ctx._state, session_key)
+            response, full_conversation = _run_orchestration_agent!(participant, deepcopy(conversation), ctx._state, session_key, ctx._state_lock)
             result = ConcurrentParticipantResult(
                 participant_id = participant_id,
                 conversation = full_conversation,
@@ -509,7 +513,7 @@ function _group_chat_agent_participant(
         output_types = DataType[GroupChatTurnResult],
         yield_types = DataType[],
         handler = (conversation, ctx) -> begin
-            response, full_conversation = _run_orchestration_agent!(participant, deepcopy(conversation), ctx._state, session_key)
+            response, full_conversation = _run_orchestration_agent!(participant, deepcopy(conversation), ctx._state, session_key, ctx._state_lock)
             send_message(ctx, GroupChatTurnResult(
                 participant_id = participant_id,
                 conversation = full_conversation,
@@ -710,19 +714,31 @@ function build(builder::ConcurrentBuilder; validate_types::Bool = true)::Workflo
         yield_types = builder.aggregator === nothing ? DataType[Vector{Message}] : DataType[Any],
         handler = (result, ctx) -> begin
             buffer_key = "__concurrent_results__:" * ctx.executor_id
-            raw = get!(ctx._state, buffer_key, Dict{String, Any}())
-            if !(raw isa AbstractDict)
-                throw(WorkflowError("Concurrent aggregation buffer must be a dictionary"))
+            # The fan-in edge may deliver a single result or a Vector of results in one
+            # aggregated message; normalize to a list of incoming results.
+            incoming = result isa AbstractVector ? collect(result) : Any[result]
+
+            # Atomically buffer incoming results across (possibly concurrent) deliveries.
+            ordered = with_state_lock(ctx) do
+                raw = get!(ctx._state, buffer_key, Dict{String, Any}())
+                if !(raw isa AbstractDict)
+                    throw(WorkflowError("Concurrent aggregation buffer must be a dictionary"))
+                end
+                buffer = raw isa Dict{String, Any} ? raw : Dict{String, Any}(string(k) => v for (k, v) in pairs(raw))
+                ctx._state[buffer_key] = buffer
+                for item in incoming
+                    current = _coerce_concurrent_result(item)
+                    buffer[current.participant_id] = current
+                end
+
+                length(buffer) < length(participant_ids) && return nothing
+
+                collected = ConcurrentParticipantResult[_coerce_concurrent_result(buffer[participant_id]) for participant_id in participant_ids]
+                Base.delete!(ctx._state, buffer_key)
+                return collected
             end
-            buffer = raw isa Dict{String, Any} ? raw : Dict{String, Any}(string(k) => v for (k, v) in pairs(raw))
-            ctx._state[buffer_key] = buffer
-            current = _coerce_concurrent_result(result)
-            buffer[current.participant_id] = current
 
-            length(buffer) < length(participant_ids) && return nothing
-
-            ordered = ConcurrentParticipantResult[_coerce_concurrent_result(buffer[participant_id]) for participant_id in participant_ids]
-            Base.delete!(ctx._state, buffer_key)
+            ordered === nothing && return nothing
             _invoke_concurrent_aggregator(builder.aggregator, ordered, ctx)
             return nothing
         end,
@@ -859,6 +875,7 @@ function _group_chat_orchestrator(builder::GroupChatBuilder, participant_ids::Ve
                     current,
                     ctx._state,
                     _selection_session_key(ctx.executor_id),
+                    ctx._state_lock,
                 )
             else
                 _round_robin_choice(participant_ids, current.last_speaker)

@@ -199,34 +199,7 @@ function _build_request_body(client::Union{OpenAIChatClient, AzureOpenAIChatClie
         "stream" => stream,
     )
 
-    tools_json = _tools_to_openai(all_tools)
-    if tools_json !== nothing
-        body["tools"] = tools_json
-    end
-    if options.temperature !== nothing
-        body["temperature"] = options.temperature
-    end
-    if options.top_p !== nothing
-        body["top_p"] = options.top_p
-    end
-    if options.max_tokens !== nothing
-        body["max_tokens"] = options.max_tokens
-    end
-    if options.stop !== nothing
-        body["stop"] = options.stop
-    end
-    if options.tool_choice !== nothing
-        body["tool_choice"] = options.tool_choice
-    end
-    if options.response_format !== nothing
-        body["response_format"] = options.response_format
-    end
-
-    for (k, v) in client.options
-        body[k] = v
-    end
-
-    return body
+    return _apply_openai_chat_options!(body, client.options, options)
 end
 
 # ── Non-Streaming Response ───────────────────────────────────────────────────
@@ -315,40 +288,10 @@ function _openai_streaming(client::Union{OpenAIChatClient, AzureOpenAIChatClient
 
     channel = Channel{ChatResponseUpdate}(32)
 
-    Threads.@spawn begin
-        proc = nothing
-        try
-            cmd = `curl -sN --max-time $(client.read_timeout) $curl_headers -d $json_body $url`
-            proc = open(cmd, "r")
-
-            for line in eachline(proc)
-                line = strip(line)
-                isempty(line) && continue
-                startswith(line, "data: ") || continue
-                payload = line[7:end]
-                payload == "[DONE]" && break
-
-                try
-                    chunk = JSON3.read(payload, Dict{String, Any})
-                    update = _parse_openai_stream_chunk(chunk)
-                    if update !== nothing
-                        put!(channel, update)
-                    end
-                catch e
-                    @warn "Failed to parse streaming chunk" exception=e
-                end
-            end
-        catch e
-            if !(e isa InvalidStateException)
-                @error "OpenAI streaming error" exception=(e, catch_backtrace())
-            end
-        finally
-            if proc !== nothing
-                try; close(proc); catch; end
-            end
-            close(channel)
-        end
-    end
+    # Connection + idle (stall) timeouts instead of a total --max-time,
+    # which would truncate long healthy generations.
+    cmd = `curl -sN --connect-timeout 10 --speed-limit 1 --speed-time $(client.read_timeout) $curl_headers -d $json_body $url`
+    Threads.@spawn _stream_openai_sse(channel, cmd, "OpenAI")
 
     return channel
 end

@@ -142,13 +142,22 @@ end
 Convert a HandoffTool to a FunctionTool that can be used in the standard
 tool execution pipeline. The function captures the handoff tool and returns
 the target agent's text response.
+
+!!! note
+    The tool-execution pipeline does not inject the live conversation into tool
+    functions, so this path cannot forward prior history to the target agent —
+    `tool.include_history` has no effect here, and only the explicit `message`
+    argument (plus the tool's `transfer_instructions`) is passed on. For
+    history-carrying handoffs, use the workflow handoff orchestration
+    (`src/workflows/handoff.jl`) instead.
 """
 function handoff_as_function_tool(tool::HandoffTool)::FunctionTool
     FunctionTool(
         name = tool.name,
         description = tool.description,
         func = (; message="") -> begin
-            # We return a marker that the agent loop can detect
+            # NOTE: no conversation history is available in the tool-based path
+            # (see the docstring); only the explicit handoff message is forwarded.
             response = execute_handoff(tool, Message[]; handoff_message=string(message))
             return response.text
         end,

@@ -150,7 +150,7 @@ end
 Extract concatenated text from all response messages.
 """
 function get_text(response::ChatResponse)::String
-    join((get_text(m) for m in response.messages), " ")
+    strip(join((get_text(m) for m in response.messages), "\n"))
 end
 
 # Property-style .text access
@@ -238,9 +238,17 @@ function _coalesce_text_contents(contents::Vector{Content})::Vector{Content}
     result = Content[]
     for c in contents
         if is_text(c) && !isempty(result) && is_text(last(result))
-            # Merge text
+            # Merge text into a NEW Content rather than mutating the previous one,
+            # which may already have been forwarded to a streaming consumer.
             prev = last(result)
-            prev.text = string(something(prev.text, ""), something(c.text, ""))
+            merged = Content(
+                type = prev.type,
+                text = string(something(prev.text, ""), something(c.text, "")),
+                annotations = prev.annotations,
+                additional_properties = prev.additional_properties,
+                raw_representation = prev.raw_representation,
+            )
+            result[end] = merged
         else
             push!(result, c)
         end
@@ -259,27 +267,30 @@ function _normalize_tool_fragment_index(value, fallback::Int)::Int
     end
 end
 
+# Coerce an arbitrary mapping into a Dict{String,Any} (string keys); non-dicts → empty.
+_string_keyed_dict(x) = x isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(x)) : Dict{String, Any}()
+
+# Look up a key and stringify the value, preserving `nothing`.
+_opt_string(d, key) = (value = get(d, key, nothing); value === nothing ? nothing : string(value))
+
 function _extract_openai_tool_fragments(raw::Dict{String, Any})::Vector{Dict{String, Any}}
     choices = get(raw, "choices", Any[])
     isempty(choices) && return Dict{String, Any}[]
 
-    choice = choices[1]
-    choice_dict = choice isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(choice)) : Dict{String, Any}()
-    delta = get(choice_dict, "delta", Dict{String, Any}())
-    delta_dict = delta isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(delta)) : Dict{String, Any}()
+    choice_dict = _string_keyed_dict(choices[1])
+    delta_dict = _string_keyed_dict(get(choice_dict, "delta", Dict{String, Any}()))
     tool_calls = get(delta_dict, "tool_calls", nothing)
     tool_calls isa AbstractVector || return Dict{String, Any}[]
 
     fragments = Dict{String, Any}[]
     for (fallback_index, tool_call) in enumerate(tool_calls)
-        tc_dict = tool_call isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(tool_call)) : Dict{String, Any}()
-        func_data = get(tc_dict, "function", Dict{String, Any}())
-        func_dict = func_data isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(func_data)) : Dict{String, Any}()
+        tc_dict = _string_keyed_dict(tool_call)
+        func_dict = _string_keyed_dict(get(tc_dict, "function", Dict{String, Any}()))
         push!(fragments, Dict{String, Any}(
             "index" => _normalize_tool_fragment_index(get(tc_dict, "index", fallback_index - 1), fallback_index - 1),
-            "call_id" => let value = get(tc_dict, "id", nothing); value === nothing ? nothing : string(value) end,
-            "name" => let value = get(func_dict, "name", nothing); value === nothing ? nothing : string(value) end,
-            "arguments_fragment" => let value = get(func_dict, "arguments", nothing); value === nothing ? nothing : string(value) end,
+            "call_id" => _opt_string(tc_dict, "id"),
+            "name" => _opt_string(func_dict, "name"),
+            "arguments_fragment" => _opt_string(func_dict, "arguments"),
         ))
     end
     return fragments
@@ -288,16 +299,16 @@ end
 function _extract_streaming_tool_fragments(update::ChatResponseUpdate)::Vector{Dict{String, Any}}
     raw = update.raw_representation
     raw isa AbstractDict || return Dict{String, Any}[]
-    raw_dict = Dict{String, Any}(string(k) => v for (k, v) in pairs(raw))
+    raw_dict = _string_keyed_dict(raw)
 
     if haskey(raw_dict, "__streaming_tool_fragments__")
         fragments = get(raw_dict, "__streaming_tool_fragments__", Any[])
         return [
             Dict{String, Any}(
                 "index" => _normalize_tool_fragment_index(get(fragment, "index", idx - 1), idx - 1),
-                "call_id" => let value = get(fragment, "call_id", nothing); value === nothing ? nothing : string(value) end,
-                "name" => let value = get(fragment, "name", nothing); value === nothing ? nothing : string(value) end,
-                "arguments_fragment" => let value = get(fragment, "arguments_fragment", nothing); value === nothing ? nothing : string(value) end,
+                "call_id" => _opt_string(fragment, "call_id"),
+                "name" => _opt_string(fragment, "name"),
+                "arguments_fragment" => _opt_string(fragment, "arguments_fragment"),
             )
             for (idx, fragment) in enumerate(fragments)
             if fragment isa AbstractDict
@@ -407,7 +418,7 @@ end
     get_text(response::AgentResponse) -> String
 """
 function get_text(response::AgentResponse)::String
-    join((get_text(m) for m in response.messages), " ")
+    join((get_text(m) for m in response.messages), "")
 end
 
 function Base.getproperty(r::AgentResponse, name::Symbol)

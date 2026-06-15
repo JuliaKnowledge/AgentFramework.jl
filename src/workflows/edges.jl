@@ -146,8 +146,12 @@ end
 """
     switch_edge(source_id, cases::Vector{Pair{Function, String}}; default=nothing) -> Vector{EdgeGroup}
 
-Create conditional routing from one source to multiple targets based on predicates.
-Returns a vector of EdgeGroups (one per case).
+Create *mutually exclusive* conditional routing from one source to multiple targets.
+Cases are evaluated in order: a message is routed to the target of the FIRST matching
+case, and to `default` only if no case matches. This mirrors Python's
+`SwitchCaseEdgeGroup`, where exactly one branch is selected. Returns a vector of
+EdgeGroups (one per case, plus default), each carrying an exclusion-aware condition so
+overlapping cases can never both fire.
 
 # Example
 ```julia
@@ -155,6 +159,7 @@ edges = switch_edge("classifier", [
     (d -> d.score > 0.8) => "high_confidence",
     (d -> d.score > 0.5) => "medium_confidence",
 ]; default="low_confidence")
+# A message with score 0.9 routes ONLY to "high_confidence" (not also "medium_confidence").
 ```
 """
 function switch_edge(
@@ -163,13 +168,23 @@ function switch_edge(
     default::Union{Nothing, String} = nothing,
 )::Vector{EdgeGroup}
     groups = EdgeGroup[]
-    for (condition, target_id) in cases
-        push!(groups, direct_edge(source_id, target_id; condition=condition))
+    preceding = Function[]
+    for (index, (condition, target_id)) in enumerate(cases)
+        # This case fires only when it matches AND no earlier case matched.
+        # A `let` block gives each closure its own fresh bindings (avoids the
+        # closure-over-loop-variable boxing that would make every case share the
+        # last iteration's `own`/`prior`).
+        exclusive_condition = let own = condition, prior = copy(preceding)
+            (data) -> own(data)::Bool && !any(c -> c(data)::Bool, prior)
+        end
+        push!(groups, direct_edge(source_id, target_id; condition=exclusive_condition, condition_name="case_$(index)"))
+        push!(preceding, condition)
     end
     if default !== nothing
-        # Default edge: matches when no other condition does
-        other_conditions = [c.first for c in cases]
-        default_condition = (data) -> !any(c -> c(data), other_conditions)
+        # Default edge: matches only when no case condition does.
+        default_condition = let prior = copy(preceding)
+            (data) -> !any(c -> c(data)::Bool, prior)
+        end
         push!(groups, direct_edge(source_id, default; condition=default_condition, condition_name="default"))
     end
     return groups
@@ -180,7 +195,16 @@ end
 """
     route_messages(group::EdgeGroup, messages::Vector{WorkflowMessage}) -> Dict{String, Vector{Any}}
 
-Route messages through an edge group, returning a dict of target_id => [payloads].
+Stateless, single-batch routing of `messages` through an edge group, returning a dict of
+`target_id => [payloads]`.
+
+For `DIRECT_EDGE` and `FAN_OUT_EDGE` this is the routing used by the engine. For
+`FAN_IN_EDGE` this helper only aggregates messages **already present in a single batch**
+(it delivers iff every source appears in `messages`, otherwise nothing); it does NOT
+accumulate contributions across supersteps. Cross-superstep fan-in is handled separately
+by the engine's stateful `_accumulate_fan_in!`, which the runner uses instead of this
+function for `FAN_IN_EDGE` groups. Use this overload for fan-in only when all sources are
+guaranteed to be in the same batch.
 """
 function route_messages(group::EdgeGroup, messages::Vector{WorkflowMessage})::Dict{String, Vector{Any}}
     result = Dict{String, Vector{Any}}()

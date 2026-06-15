@@ -35,7 +35,11 @@ function count_message_tokens(tokenizer::AbstractTokenizer, messages::Vector{Mes
                 total += count_tokens(tokenizer, something(c.name, ""))
                 total += count_tokens(tokenizer, something(c.arguments, ""))
             elseif c.type == FUNCTION_RESULT
-                total += count_tokens(tokenizer, something(c.result, ""))
+                # `result` is `Any`; stringify non-string values the same way the agent
+                # loop serializes them so estimation matches what's actually sent.
+                r = c.result
+                result_text = r === nothing ? "" : (r isa AbstractString ? r : JSON3.write(r))
+                total += count_tokens(tokenizer, result_text)
             end
         end
     end

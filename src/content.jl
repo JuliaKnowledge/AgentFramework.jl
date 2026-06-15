@@ -228,7 +228,10 @@ Create a data content item with base64-encoded binary data.
 function data_content(data::AbstractString, media_type::Union{Nothing, AbstractString} = nothing;
     annotations::Union{Nothing, Vector{Annotation}} = nothing,
 )::Content
-    Content(type=DATA, text=String(data), media_type=media_type === nothing ? nothing : String(media_type), annotations=annotations)
+    mt = media_type === nothing ? nothing : String(media_type)
+    # Store binary payload as a data-URI in `uri`, matching Python's Content.from_data.
+    uri = "data:$(something(mt, ""));base64,$(data)"
+    Content(type=DATA, uri=uri, media_type=mt, annotations=annotations)
 end
 
 """
@@ -446,9 +449,10 @@ function content_to_dict(content::Content; exclude_none::Bool = true)::Dict{Stri
             d[String(field)] = val
         end
     end
-    # Merge additional_properties at top level
+    # Emit additional_properties as a nested key (matches Python's serialization,
+    # where from_dict pops "additional_properties" back out).
     if !isempty(content.additional_properties)
-        merge!(d, content.additional_properties)
+        d["additional_properties"] = content.additional_properties
     end
     return d
 end
@@ -460,6 +464,23 @@ Deserialize a Content from a Dict.
 """
 function content_from_dict(d::Dict{String, Any})::Content
     ct = parse_content_type(d["type"]::String)
+
+    # Match Python from_dict: type=="data" with a raw base64 "data" key + media_type
+    # is rebuilt into a data-URI (mirrors Content.from_data).
+    if ct == DATA && haskey(d, "data") && haskey(d, "media_type") &&
+       d["data"] !== nothing && d["media_type"] !== nothing
+        media = String(d["media_type"])
+        ann = nothing
+        if haskey(d, "annotations") && d["annotations"] isa Vector
+            ann = Annotation[v for v in d["annotations"] if v isa Dict]
+        end
+        c = data_content(String(d["data"]), media; annotations=ann)
+        if haskey(d, "additional_properties") && d["additional_properties"] isa Dict
+            merge!(c.additional_properties, Dict{String, Any}(d["additional_properties"]))
+        end
+        return c
+    end
+
     kwargs = Dict{Symbol, Any}(:type => ct)
 
     for field in fieldnames(Content)
@@ -476,6 +497,11 @@ function content_from_dict(d::Dict{String, Any})::Content
             haskey(val, "input_tokens") && (ud.input_tokens = val["input_tokens"]::Int)
             haskey(val, "output_tokens") && (ud.output_tokens = val["output_tokens"]::Int)
             haskey(val, "total_tokens") && (ud.total_tokens = val["total_tokens"]::Int)
+            # Preserve provider-specific counters (round-trips the merged `additional`).
+            for (k, v) in val
+                k in ("input_tokens", "output_tokens", "total_tokens") && continue
+                v isa Integer && (ud.additional[String(k)] = Int(v))
+            end
             kwargs[field] = ud
         elseif field == :function_call && val isa Dict
             kwargs[field] = content_from_dict(val)
@@ -486,6 +512,11 @@ function content_from_dict(d::Dict{String, Any})::Content
         else
             kwargs[field] = val
         end
+    end
+
+    # Read back nested additional_properties (matches Python's from_dict pop).
+    if haskey(d, "additional_properties") && d["additional_properties"] isa Dict
+        kwargs[:additional_properties] = Dict{String, Any}(d["additional_properties"])
     end
 
     Content(; kwargs...)

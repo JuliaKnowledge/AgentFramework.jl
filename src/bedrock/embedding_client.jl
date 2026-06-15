@@ -41,13 +41,11 @@ end
 function _build_embedding_request(
     client::BedrockEmbeddingClient,
     text::AbstractString,
-    model::AbstractString,
 )::Dict{String, Any}
     body = Dict{String, Any}("inputText" => String(text))
     for (key, value) in client.options
         body[key] = value
     end
-    body["modelId"] = model
     return body
 end
 
@@ -63,8 +61,7 @@ function get_embeddings(
     embeddings = Vector{Vector{Float64}}()
 
     for text in texts
-        body = _build_embedding_request(client, text, embed_model)
-        delete!(body, "modelId")
+        body = _build_embedding_request(client, text)
         response = _post_json(client, url, body; error_label = "Bedrock embeddings")
         vector = get(response, "embedding", nothing)
         vector isa AbstractVector || throw(

@@ -51,6 +51,8 @@ state, and workflow output.
 - `_events::Vector{WorkflowEvent}`: Events emitted during this handler invocation.
 - `_state::Dict{String, Any}`: Shared workflow state.
 - `_request_infos::Vector{WorkflowEvent}`: Request info events for HIL.
+- `_state_lock::ReentrantLock`: Guards all reads/writes of the shared `_state` dict
+   so concurrently-scheduled handlers within a superstep do not corrupt shared buffers.
 """
 Base.@kwdef mutable struct WorkflowContext
     executor_id::String
@@ -60,7 +62,17 @@ Base.@kwdef mutable struct WorkflowContext
     _events::Vector{WorkflowEvent} = WorkflowEvent[]
     _state::Dict{String, Any} = Dict{String, Any}()
     _request_infos::Vector{WorkflowEvent} = WorkflowEvent[]
+    _state_lock::ReentrantLock = ReentrantLock()
 end
+
+"""
+    with_state_lock(f, ctx::WorkflowContext)
+
+Run `f()` while holding the workflow's shared-state lock. Use this to wrap any
+read-modify-write sequence on `ctx._state` (or nested buffers) that must be atomic
+across concurrently-scheduled handlers within a superstep.
+"""
+with_state_lock(f, ctx::WorkflowContext) = lock(f, ctx._state_lock)
 
 """
     send_message(ctx::WorkflowContext, data; target_id=nothing)
@@ -96,7 +108,9 @@ end
 Read a value from the shared workflow state.
 """
 function get_state(ctx::WorkflowContext, key::String, default=nothing)
-    get(ctx._state, key, default)
+    lock(ctx._state_lock) do
+        get(ctx._state, key, default)
+    end
 end
 
 """
@@ -106,7 +120,9 @@ Write a value to the shared workflow state. The value becomes visible
 to other executors in the next superstep.
 """
 function set_state!(ctx::WorkflowContext, key::String, value)
-    ctx._state[key] = value
+    lock(ctx._state_lock) do
+        ctx._state[key] = value
+    end
     return nothing
 end
 
@@ -138,11 +154,13 @@ function execute_handler(
     message,
     source_ids::Vector{String},
     state::Dict{String, Any},
+    state_lock::ReentrantLock = ReentrantLock(),
 )::WorkflowContext
     ctx = WorkflowContext(
         executor_id = spec.id,
         source_ids = source_ids,
         _state = state,
+        _state_lock = state_lock,
     )
 
     spec.handler(message, ctx)

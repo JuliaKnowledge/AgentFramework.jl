@@ -192,7 +192,7 @@ function _compact_summarize_oldest(messages::Vector{Message}, config::Compaction
     summary_parts = String[]
     for msg in old_msgs
         role_str = msg.role == :user ? "User" : msg.role == :assistant ? "Assistant" : string(msg.role)
-        text_parts = [something(c.text, "") for c in msg.contents if c.type == TEXT && c.text !== nothing]
+        text_parts = [c.text for c in msg.contents if c.type == TEXT && c.text !== nothing]
         isempty(text_parts) && continue
         push!(summary_parts, "$role_str: " * join(text_parts, " "))
     end
@@ -202,7 +202,7 @@ function _compact_summarize_oldest(messages::Vector{Message}, config::Compaction
         # Truncate if still too long
         max_summary_chars = ceil(Int, config.max_tokens * config.chars_per_token * 0.3)
         if length(summary_text) > max_summary_chars
-            summary_text = summary_text[1:max_summary_chars] * "...]"
+            summary_text = first(summary_text, max_summary_chars) * "...]"
         end
         summary_msg = Message(role=:system, contents=[text_content(summary_text)])
         return vcat(system_msgs, [summary_msg], recent_msgs)
@@ -272,7 +272,7 @@ function _compact_truncate(messages::Vector{Message}, config::CompactionConfig):
             if c.type == TEXT && c.text !== nothing
                 max_chars = floor(Int, remaining_tokens * config.chars_per_token) - 16  # leave room for overhead
                 if max_chars > 0
-                    truncated_text = length(c.text) > max_chars ? c.text[1:max_chars] * "…" : c.text
+                    truncated_text = length(c.text) > max_chars ? first(c.text, max_chars) * "…" : c.text
                     push!(new_contents, text_content(truncated_text))
                 end
             end

@@ -64,6 +64,19 @@ function _messages_to_openai(messages::Vector{Message}, tools::Vector{FunctionTo
         end
 
         if !isempty(tool_results)
+            # Emit any accompanying assistant text as its own message so it isn't
+            # lost when a message carries both text and tool results.
+            text_joined = join(text_parts, " ")
+            if !isempty(strip(text_joined))
+                entry = Dict{String, Any}(
+                    "role" => role_str,
+                    "content" => text_joined,
+                )
+                if msg.author_name !== nothing
+                    entry["name"] = msg.author_name
+                end
+                push!(result, entry)
+            end
             append!(result, tool_results)
         elseif !isempty(tool_calls_json)
             entry = Dict{String, Any}(
@@ -91,19 +104,17 @@ function _tools_to_openai(tools::Vector{FunctionTool})
     return [tool_to_schema(t) for t in tools]
 end
 
-# ── Request Body Construction ────────────────────────────────────────────────
+"""
+    _apply_openai_chat_options!(body, client_options, options)
 
-function _build_request_body(client::OllamaChatClient, messages::Vector{Message}, options::ChatOptions; stream::Bool=false)
-    model = options.model !== nothing ? options.model : client.model
-    all_tools = options.tools
-
-    body = Dict{String, Any}(
-        "model" => model,
-        "messages" => _messages_to_openai(messages, all_tools),
-        "stream" => stream,
-    )
-
-    tools_json = _tools_to_openai(all_tools)
+Populate `body` with the standard OpenAI-compatible chat options from `options`,
+then apply `client_options` defaults and per-request `options.additional`
+overrides. Shared by the OpenAI, Azure OpenAI, Foundry, and Ollama clients.
+"""
+function _apply_openai_chat_options!(body::Dict{String, Any},
+                                     client_options::Dict{String, Any},
+                                     options::ChatOptions)
+    tools_json = _tools_to_openai(options.tools)
     if tools_json !== nothing
         body["tools"] = tools_json
     end
@@ -126,11 +137,32 @@ function _build_request_body(client::OllamaChatClient, messages::Vector{Message}
         body["response_format"] = options.response_format
     end
 
-    for (k, v) in client.options
+    for (k, v) in client_options
         body[k] = v
+    end
+    # Per-request provider-specific options override client defaults.
+    if options.additional !== nothing
+        for (k, v) in options.additional
+            body[k] = v
+        end
     end
 
     return body
+end
+
+# ── Request Body Construction ────────────────────────────────────────────────
+
+function _build_request_body(client::OllamaChatClient, messages::Vector{Message}, options::ChatOptions; stream::Bool=false)
+    model = options.model !== nothing ? options.model : client.model
+    all_tools = options.tools
+
+    body = Dict{String, Any}(
+        "model" => model,
+        "messages" => _messages_to_openai(messages, all_tools),
+        "stream" => stream,
+    )
+
+    return _apply_openai_chat_options!(body, client.options, options)
 end
 
 # ── Non-Streaming Response ───────────────────────────────────────────────────
@@ -168,40 +200,10 @@ function get_response_streaming(client::OllamaChatClient, messages::Vector{Messa
 
     channel = Channel{ChatResponseUpdate}(32)
 
-    Threads.@spawn begin
-        proc = nothing
-        try
-            cmd = `curl -sN --max-time $(client.read_timeout) -H "Content-Type: application/json" -d $json_body $url`
-            proc = open(cmd, "r")
-
-            for line in eachline(proc)
-                line = strip(line)
-                isempty(line) && continue
-                startswith(line, "data: ") || continue
-                payload = line[7:end]
-                payload == "[DONE]" && break
-
-                try
-                    chunk = JSON3.read(payload, Dict{String, Any})
-                    update = _parse_openai_stream_chunk(chunk)
-                    if update !== nothing
-                        put!(channel, update)
-                    end
-                catch e
-                    @warn "Failed to parse streaming chunk" exception=e
-                end
-            end
-        catch e
-            if !(e isa InvalidStateException)
-                @error "Ollama streaming error" exception=(e, catch_backtrace())
-            end
-        finally
-            if proc !== nothing
-                try; close(proc); catch; end
-            end
-            close(channel)
-        end
-    end
+    # Connection + idle (stall) timeouts instead of a total --max-time,
+    # which would truncate long healthy generations.
+    cmd = `curl -sN --connect-timeout 10 --speed-limit 1 --speed-time $(client.read_timeout) -H "Content-Type: application/json" -d $json_body $url`
+    Threads.@spawn _stream_openai_sse(channel, cmd, "Ollama")
 
     return channel
 end
@@ -342,6 +344,50 @@ function _parse_openai_stream_chunk(chunk::Dict{String, Any})::Union{Nothing, Ch
         response_id = response_id !== nothing ? string(response_id) : nothing,
         raw_representation = chunk,
     )
+end
+
+# ── Shared OpenAI-compatible SSE Streaming ───────────────────────────────────
+
+"""
+    _stream_openai_sse(channel, cmd, error_label)
+
+Run `cmd` (a curl subprocess emitting OpenAI-compatible SSE) and push parsed
+`ChatResponseUpdate`s onto `channel`, closing it when done. Shared by the
+OpenAI, Azure OpenAI, Foundry, and Ollama streaming clients.
+"""
+function _stream_openai_sse(channel::Channel{ChatResponseUpdate}, cmd::Cmd, error_label::String)
+    proc = nothing
+    try
+        proc = open(cmd, "r")
+
+        for line in eachline(proc)
+            line = strip(line)
+            isempty(line) && continue
+            startswith(line, "data: ") || continue
+            payload = line[7:end]
+            payload == "[DONE]" && break
+
+            try
+                chunk = JSON3.read(payload, Dict{String, Any})
+                update = _parse_openai_stream_chunk(chunk)
+                if update !== nothing
+                    put!(channel, update)
+                end
+            catch e
+                @warn "Failed to parse $error_label chunk" exception=e
+            end
+        end
+    catch e
+        if !(e isa InvalidStateException)
+            @error "$error_label streaming error" exception=(e, catch_backtrace())
+        end
+    finally
+        if proc !== nothing
+            try; close(proc); catch; end
+        end
+        close(channel)
+    end
+    return nothing
 end
 
 # ── Capability Traits ────────────────────────────────────────────────────────

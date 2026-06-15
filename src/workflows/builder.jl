@@ -172,14 +172,19 @@ function build(builder::WorkflowBuilder; validate_types::Bool = true)::Workflow
     # Optional comprehensive validation
     if validate_types
         vresult = validate_workflow(builder)
+        errors = String[]
         for issue in vresult.issues
             if issue.severity == :error
-                @warn "Validation error: $(issue.message)"
+                push!(errors, issue.message)
             elseif issue.severity == :warning
                 @warn "Validation warning: $(issue.message)"
             else
                 @info "Validation info: $(issue.message)"
             end
+        end
+        # Match Python's WorkflowBuilder.build(): fail the build on any error-severity issue.
+        if !isempty(errors)
+            throw(WorkflowError("Workflow validation failed with $(length(errors)) error(s):\n  - " * join(errors, "\n  - ")))
         end
     end
 

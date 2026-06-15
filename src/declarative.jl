@@ -700,12 +700,15 @@ function _coerce_declarative_value(value, T)
         return value
     elseif T == String
         return value isa AbstractString ? String(value) : string(value)
+    elseif T == Bool
+        # Must precede the Integer branch: `Bool <: Integer`, so a Bool field would
+        # otherwise be coerced to Int. Accept numeric 0/1 and string forms.
+        value isa AbstractString && return lowercase(strip(value)) in ("true", "1", "yes")
+        return Bool(value)
     elseif T <: Integer
         return Int(value)
     elseif T <: AbstractFloat
         return Float64(value)
-    elseif T == Bool
-        return Bool(value)
     elseif T <: AbstractDict
         materialized = _require_declarative_dict(value, "Declarative mapping")
         key_t = keytype(T)

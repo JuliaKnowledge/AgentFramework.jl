@@ -48,7 +48,8 @@
         @test content_type_string(message.contents[2].type) == "uri"
         @test message.contents[2].uri == "https://example.com/file.pdf"
         @test content_type_string(message.contents[3].type) == "data"
-        @test message.contents[3].text == "YQ=="
+        @test message.contents[3].uri == "data:text/plain;base64,YQ=="
+        @test message.contents[3].media_type == "text/plain"
     end
 
     @testset "a2a_task_from_dict and task_to_response parse terminal artifacts" begin

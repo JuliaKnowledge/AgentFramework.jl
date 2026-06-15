@@ -366,10 +366,8 @@ using Test
             add_edge(builder, "loop", "loop")
             wf = build(builder)
 
-            result = run_workflow(wf, "ping")
-            # Should terminate after max_iterations
-            supersteps = [e for e in result.events if e.type == EVT_SUPERSTEP_COMPLETED]
-            @test length(supersteps) <= 5
+            # A non-converging workflow now raises (matches Python's WorkflowConvergenceException)
+            @test_throws WorkflowConvergenceError run_workflow(wf, "ping")
         end
 
         @testset "Streaming events" begin
@@ -454,9 +452,14 @@ using Test
             result = run_workflow(wf, "hello")
             outputs = get_outputs(result)
 
-            @test length(outputs) == 2
-            @test "from_a" in outputs
-            @test "from_b" in outputs
+            # Fan-in now delivers ONE aggregated message (a Vector of all contributions)
+            # to the target, matching Python's FanInEdgeRunner — so `c` yields a single
+            # aggregated output rather than one per contribution.
+            @test length(outputs) == 1
+            agg = outputs[1]
+            @test agg isa AbstractVector
+            @test "from_a" in agg
+            @test "from_b" in agg
 
             # Verify it took 3 supersteps (a, b, c each fire in separate steps)
             supersteps = [e for e in result.events if e.type == EVT_SUPERSTEP_COMPLETED]

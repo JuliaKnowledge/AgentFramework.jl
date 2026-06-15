@@ -67,12 +67,10 @@ Set an executor-local state value.
 """
 function set_local!(store::ScopedStateStore, executor_id::String, key::String, value)
     lock(store.lock) do
-        if !haskey(store.local_state, executor_id)
-            store.local_state[executor_id] = Dict{String, ScopedValue}()
-        end
-        store.local_state[executor_id][key] = ScopedValue(
+        exec_state = get!(store.local_state, executor_id, Dict{String, ScopedValue}())
+        exec_state[key] = ScopedValue(
             value=value, scope=SCOPE_LOCAL, owner=executor_id,
-            version=_next_version(store.local_state[executor_id], key),
+            version=_next_version(exec_state, key),
             updated_at=time(),
         )
     end

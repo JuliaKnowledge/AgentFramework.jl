@@ -128,8 +128,9 @@ using Test
             result=nothing,
         )
 
-        # Simulate the LLM returning a response
-        function fake_next()
+        # Simulate the LLM returning a response. The chat-middleware contract
+        # invokes next_fn(ctx), so fake_next must accept the context argument.
+        function fake_next(_ctx)
             test_ctx.result = (messages=[Message(:assistant, "world")],)
         end
 

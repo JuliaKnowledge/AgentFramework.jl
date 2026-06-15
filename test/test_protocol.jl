@@ -260,7 +260,7 @@ using Logging
         @test occursin("nothing", desc3)
     end
 
-    @testset "Build-time validation warning integration" begin
+    @testset "Build-time validation integration" begin
         string_out = ExecutorSpec(
             id = "string_out",
             input_types = DataType[Any],
@@ -274,31 +274,29 @@ using Logging
             handler = (msg, ctx) -> yield_output(ctx, msg + 1),
         )
 
-        # Build with validation enabled — should emit warnings but not throw
+        # Build with validation enabled — a type-incompatible edge is an :error and
+        # now aborts the build (matches Python's WorkflowBuilder.build()).
         builder = WorkflowBuilder(name = "WarnTest", start = string_out)
         add_executor(builder, int_in)
         add_edge(builder, "string_out", "int_in")
         add_output(builder, "int_in")
 
-        logs, wf = Test.collect_test_logs() do
+        err = try
             build(builder; validate_types = true)
+            nothing
+        catch e
+            e
         end
+        @test err isa WorkflowError
+        @test occursin("Incompatible", sprint(showerror, err))
 
-        # Should have produced a warning about type incompatibility
-        @test any(l -> l.level == Logging.Warn && occursin("Incompatible", l.message), logs)
-        # Workflow should still be built successfully
-        @test wf isa Workflow
-
-        # Build with validation disabled — no warnings
+        # Build with validation disabled — succeeds without raising
         builder2 = WorkflowBuilder(name = "NoWarnTest", start = string_out)
         add_executor(builder2, int_in)
         add_edge(builder2, "string_out", "int_in")
         add_output(builder2, "int_in")
 
-        logs2, wf2 = Test.collect_test_logs() do
-            build(builder2; validate_types = false)
-        end
-        @test isempty(logs2)
+        wf2 = build(builder2; validate_types = false)
         @test wf2 isa Workflow
     end
 

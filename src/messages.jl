@@ -94,11 +94,8 @@ end
 
 # Property-style access
 function Base.getproperty(msg::Message, name::Symbol)
-    if name === :text
-        return get_text(msg)
-    else
-        return getfield(msg, name)
-    end
+    name === :text && return get_text(msg)
+    return getfield(msg, name)
 end
 
 function Base.propertynames(msg::Message, private::Bool=false)

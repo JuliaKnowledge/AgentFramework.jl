@@ -10,7 +10,7 @@
 Chat client for Anthropic's Claude Messages API.
 
 # Fields
-- `model::String`: Model name (default: "claude-sonnet-4-20250514").
+- `model::String`: Model name (default: "claude-sonnet-4-6").
 - `api_key::String`: API key. Falls back to `ENV["ANTHROPIC_API_KEY"]` if empty.
 - `base_url::String`: API base URL (default: "https://api.anthropic.com").
 - `api_version::String`: Anthropic API version header (default: "2023-06-01").
@@ -19,13 +19,13 @@ Chat client for Anthropic's Claude Messages API.
 
 # Examples
 ```julia
-client = AnthropicChatClient(model="claude-sonnet-4-20250514")
+client = AnthropicChatClient(model="claude-sonnet-4-6")
 response = get_response(client, [Message(:user, "Hello!")], ChatOptions())
 println(response.text)
 ```
 """
 Base.@kwdef mutable struct AnthropicChatClient <: AbstractChatClient
-    model::String = "claude-sonnet-4-20250514"
+    model::String = "claude-sonnet-4-6"
     api_key::String = ""
     base_url::String = "https://api.anthropic.com"
     api_version::String = "2023-06-01"
@@ -130,9 +130,9 @@ function _messages_to_anthropic(messages::Vector{Message})
             end
         end
 
-        if isempty(content_blocks)
-            push!(content_blocks, Dict{String, Any}("type" => "text", "text" => ""))
-        end
+        # Skip messages with no emittable content: Anthropic rejects empty text blocks
+        # ("text content blocks must be non-empty"), so omit the message entirely.
+        isempty(content_blocks) && continue
 
         push!(raw, Dict{String, Any}("role" => role_str, "content" => content_blocks))
     end
@@ -199,10 +199,13 @@ function _build_anthropic_request(client::AnthropicChatClient,
         body["stop_sequences"] = options.stop
     end
     if options.tool_choice !== nothing
-        # Anthropic tool_choice format: {"type": "auto"}, {"type": "any"}, {"type": "tool", "name": "..."}
+        # Anthropic tool_choice format: {"type": "auto"}, {"type": "any"}, {"type": "none"}, {"type": "tool", "name": "..."}
         if options.tool_choice isa String
             if options.tool_choice in ("auto", "any", "none")
                 body["tool_choice"] = Dict{String, Any}("type" => options.tool_choice)
+            elseif options.tool_choice == "required"
+                # "required" means "must call some tool" → Anthropic's "any"
+                body["tool_choice"] = Dict{String, Any}("type" => "any")
             else
                 body["tool_choice"] = Dict{String, Any}("type" => "tool", "name" => options.tool_choice)
             end
@@ -211,11 +214,54 @@ function _build_anthropic_request(client::AnthropicChatClient,
         end
     end
 
+    # Structured output: Anthropic uses output_config.format with a JSON schema.
+    if options.response_format !== nothing
+        schema = _anthropic_response_format_schema(options.response_format)
+        if schema !== nothing
+            body["output_config"] = Dict{String, Any}(
+                "format" => Dict{String, Any}("type" => "json_schema", "schema" => schema),
+            )
+        end
+    end
+
     for (k, v) in client.options
         body[k] = v
     end
+    # Per-request provider-specific options override client defaults.
+    if options.additional !== nothing
+        for (k, v) in options.additional
+            body[k] = v
+        end
+    end
 
     return body
+end
+
+"""
+    _anthropic_response_format_schema(response_format) -> Union{Nothing, Dict}
+
+Extract a JSON schema from a `response_format` dict for Anthropic structured output.
+Accepts OpenAI-style (`{"json_schema": {"schema": ...}}`), direct (`{"schema": ...}`),
+or a raw schema dict, matching the Python anthropic package behavior.
+"""
+function _anthropic_response_format_schema(response_format)::Union{Nothing, Dict{String, Any}}
+    response_format isa AbstractDict || return nothing
+    rf = Dict{String, Any}(string(k) => v for (k, v) in pairs(response_format))
+
+    schema = if haskey(rf, "json_schema")
+        js = rf["json_schema"]
+        js isa AbstractDict ? get(js, "schema", nothing) : nothing
+    elseif haskey(rf, "schema")
+        rf["schema"]
+    else
+        # Only treat as a raw schema if it looks like one (avoid e.g. {"type":"text"}).
+        get(rf, "type", nothing) == "json_object" ? nothing : rf
+    end
+
+    schema isa AbstractDict || return nothing
+    schema_dict = Dict{String, Any}(string(k) => v for (k, v) in pairs(schema))
+    schema_dict["additionalProperties"] = false
+    return schema_dict
 end
 
 # ── Header Construction ──────────────────────────────────────────────────────
@@ -358,13 +404,16 @@ function get_response_streaming(client::AnthropicChatClient, messages::Vector{Me
     Threads.@spawn begin
         proc = nothing
         try
-            cmd = `curl -sN --max-time $(client.read_timeout) $curl_headers -d $json_body $url`
+            # Use connection + idle (stall) timeouts rather than a total --max-time,
+            # which would truncate long healthy generations.
+            cmd = `curl -sN --connect-timeout 10 --speed-limit 1 --speed-time $(client.read_timeout) $curl_headers -d $json_body $url`
             proc = open(cmd, "r")
 
-            current_block_type = nothing
-            current_block_id = nothing
-            current_block_name = nothing
-            current_block_index = nothing
+            # Per-block state keyed by the event's `index` so sequential blocks
+            # (text + tool_use, or multiple tool_use) don't corrupt each other.
+            block_types = Dict{Int, String}()
+            block_ids = Dict{Int, String}()
+            block_names = Dict{Int, String}()
             tool_block_counter = 0
 
             for line in eachline(proc)
@@ -404,24 +453,20 @@ function get_response_streaming(client::AnthropicChatClient, messages::Vector{Me
                     elseif event_type == "content_block_start"
                         block = get(chunk, "content_block", Dict{String, Any}())
                         block_dict = block isa Dict ? block : Dict{String, Any}(string(k) => v for (k, v) in pairs(block))
-                        current_block_type = get(block_dict, "type", "text")
-                        block_index = get(chunk, "index", nothing)
-                        if current_block_type == "tool_use"
-                            current_block_index = block_index !== nothing ? Int(block_index) : tool_block_counter
-                            if block_index === nothing
-                                tool_block_counter += 1
-                            else
-                                tool_block_counter = max(tool_block_counter, Int(block_index) + 1)
-                            end
-                        else
-                            current_block_index = block_index === nothing ? nothing : Int(block_index)
-                        end
-                        if current_block_type == "tool_use"
-                            current_block_id = get(block_dict, "id", "")
-                            current_block_name = get(block_dict, "name", "")
+                        block_type = get(block_dict, "type", "text")
+                        raw_index = get(chunk, "index", nothing)
+                        block_index = raw_index !== nothing ? Int(raw_index) : tool_block_counter
+                        tool_block_counter = max(tool_block_counter, block_index + 1)
+
+                        block_types[block_index] = block_type
+                        if block_type == "tool_use"
+                            block_ids[block_index] = string(get(block_dict, "id", ""))
+                            block_names[block_index] = string(get(block_dict, "name", ""))
                         end
 
                     elseif event_type == "content_block_delta"
+                        raw_index = get(chunk, "index", nothing)
+                        block_index = raw_index !== nothing ? Int(raw_index) : 0
                         delta = get(chunk, "delta", Dict{String, Any}())
                         delta_dict = delta isa Dict ? delta : Dict{String, Any}(string(k) => v for (k, v) in pairs(delta))
                         delta_type = get(delta_dict, "type", "")
@@ -435,21 +480,24 @@ function get_response_streaming(client::AnthropicChatClient, messages::Vector{Me
                                 ))
                             end
                         elseif delta_type == "input_json_delta"
-                            # Partial JSON for tool input — emit as function call chunk
+                            # Partial JSON for tool input — emit as function call chunk.
+                            # Attribute to the block identified by this event's index.
                             partial = get(delta_dict, "partial_json", "")
                             if !isempty(partial)
+                                block_id = get(block_ids, block_index, "")
+                                block_name = get(block_names, block_index, "")
                                 put!(channel, ChatResponseUpdate(
                                     contents = [function_call_content(
-                                        string(something(current_block_id, "")),
-                                        string(something(current_block_name, "")),
+                                        block_id,
+                                        block_name,
                                         partial,
                                     )],
                                     raw_representation = Dict{String, Any}(
                                         "__streaming_tool_fragments__" => [
                                             Dict{String, Any}(
-                                                "index" => something(current_block_index, 0),
-                                                "call_id" => string(something(current_block_id, "")),
-                                                "name" => string(something(current_block_name, "")),
+                                                "index" => block_index,
+                                                "call_id" => block_id,
+                                                "name" => block_name,
                                                 "arguments_fragment" => partial,
                                             ),
                                         ],
@@ -457,6 +505,17 @@ function get_response_streaming(client::AnthropicChatClient, messages::Vector{Me
                                     ),
                                 ))
                             end
+                        end
+
+                    elseif event_type == "content_block_stop"
+                        # Finalize/reset the block's tracking state so subsequent
+                        # blocks at the same or new index start clean.
+                        raw_index = get(chunk, "index", nothing)
+                        if raw_index !== nothing
+                            stop_index = Int(raw_index)
+                            delete!(block_types, stop_index)
+                            delete!(block_ids, stop_index)
+                            delete!(block_names, stop_index)
                         end
 
                     elseif event_type == "message_delta"

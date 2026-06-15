@@ -41,8 +41,8 @@ function content_to_a2a_part(content::Content)::Dict{String, Any}
         !isempty(metadata) && (part["metadata"] = metadata)
         return part
     elseif content.type == AgentFramework.DATA
-        content.text === nothing && throw(A2AError("Data content requires base64 data in the `text` field"))
-        file = Dict{String, Any}("bytes" => content.text)
+        content.uri === nothing && throw(A2AError("Data content requires a base64 data-URI in the `uri` field"))
+        file = Dict{String, Any}("bytes" => AgentFramework._base64_from_data_uri(content.uri))
         content.media_type !== nothing && (file["mimeType"] = content.media_type)
         part = Dict{String, Any}("kind" => "file", "file" => file)
         !isempty(metadata) && (part["metadata"] = metadata)
@@ -104,10 +104,13 @@ function a2a_part_to_content(part::AbstractDict)::Content
                 raw_representation = values,
             )
         elseif haskey(file, "bytes")
+            b64 = string(file["bytes"])
+            mt = _maybe_string(get(file, "mimeType", nothing))
+            uri = mt === nothing ? "data:;base64,$(b64)" : "data:$(mt);base64,$(b64)"
             return Content(
                 type = AgentFramework.DATA,
-                text = string(file["bytes"]),
-                media_type = _maybe_string(get(file, "mimeType", nothing)),
+                uri = uri,
+                media_type = mt,
                 additional_properties = metadata,
                 raw_representation = values,
             )

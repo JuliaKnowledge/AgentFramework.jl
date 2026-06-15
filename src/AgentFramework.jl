@@ -130,7 +130,7 @@ export AbstractMiddleware, AbstractExecutor
 
 # Exceptions
 export AgentFrameworkError, AgentError, ChatClientError, ToolError
-export MiddlewareError, WorkflowError
+export MiddlewareError, WorkflowError, WorkflowConvergenceError
 export DeclarativeError
 export AgentInvalidAuthError, AgentInvalidRequestError, AgentInvalidResponseError
 export ChatClientInvalidAuthError, ChatClientInvalidRequestError

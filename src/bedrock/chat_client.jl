@@ -66,16 +66,16 @@ function _convert_prepared_tool_result_to_blocks(value)::Vector{Dict{String, Any
             append!(blocks, _convert_prepared_tool_result_to_blocks(item))
         end
         return isempty(blocks) ? Dict{String, Any}[Dict("text" => "")] : blocks
-    elseif value isa AbstractDict
-        return [Dict{String, Any}("json" => Dict{String, Any}(string(key) => item for (key, item) in pairs(value)))]
-    elseif value isa NamedTuple
+    elseif value isa AbstractDict || value isa NamedTuple
         return [Dict{String, Any}("json" => Dict{String, Any}(string(key) => item for (key, item) in pairs(value)))]
     elseif value isa AbstractString
         return [Dict{String, Any}("text" => String(value))]
     elseif value isa Content && is_text(value)
         return [Dict{String, Any}("text" => something(value.text, ""))]
     elseif value isa Number || value isa Bool || value === nothing
-        return [Dict{String, Any}("json" => value)]
+        # Bedrock's toolResult.content[].json requires a JSON object, not a bare
+        # scalar; wrap the scalar so the payload is valid.
+        return [Dict{String, Any}("json" => Dict{String, Any}("result" => value))]
     end
 
     return [Dict{String, Any}("text" => string(value))]
@@ -451,6 +451,10 @@ function get_response(
     return _parse_converse_response(response, client)
 end
 
+# NOTE: This is *simulated* streaming — it calls the non-streaming Converse API and
+# emits the full response as a single update, matching the Python Bedrock client
+# (which uses `converse`, not `ConverseStream`). The `HasStreaming()` trait below
+# reflects that the streaming API contract is supported, not token-by-token delivery.
 function get_response_streaming(
     client::BedrockChatClient,
     messages::Vector{Message},

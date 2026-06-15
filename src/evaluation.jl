@@ -312,9 +312,7 @@ function _extract_tool_calls(item::EvalItem)
         for c in msg.contents
             if is_function_call(c) && c.name !== nothing
                 args = nothing
-                if c.arguments isa Dict
-                    args = c.arguments
-                elseif c.arguments isa String
+                if c.arguments isa String
                     try
                         parsed = JSON3.read(c.arguments, Dict{String, Any})
                         if parsed isa Dict

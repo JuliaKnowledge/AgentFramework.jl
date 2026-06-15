@@ -15,6 +15,7 @@ using Test
         c = data_content("base64data", "image/png")
         @test c.type == AgentFramework.DATA
         @test c.media_type == "image/png"
+        @test c.uri == "data:image/png;base64,base64data"
     end
 
     @testset "uri_content" begin

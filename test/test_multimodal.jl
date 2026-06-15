@@ -40,7 +40,7 @@ using Base64
         c = image_content(data)
         @test c.type == AgentFramework.DATA
         @test c.media_type == "image/png"
-        @test c.text == base64encode(data)
+        @test c.uri == "data:image/png;base64,$(base64encode(data))"
         @test c.additional_properties["content_category"] == "image"
     end
 
@@ -60,7 +60,7 @@ using Base64
         c = image_content(tmpfile)
         @test c.type == AgentFramework.DATA
         @test c.media_type == "image/png"
-        @test base64decode(c.text) == test_data
+        @test base64decode(AgentFramework._base64_from_data_uri(c.uri)) == test_data
         @test c.additional_properties["content_category"] == "image"
 
         rm(tmpdir; recursive=true)
@@ -100,7 +100,7 @@ using Base64
         c = audio_content(tmpfile)
         @test c.type == AgentFramework.DATA
         @test c.media_type == "audio/mpeg"
-        @test base64decode(c.text) == test_data
+        @test base64decode(AgentFramework._base64_from_data_uri(c.uri)) == test_data
 
         rm(tmpdir; recursive=true)
     end

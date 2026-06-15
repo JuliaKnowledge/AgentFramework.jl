@@ -87,7 +87,16 @@ function invoke_tool(tool::FunctionTool, arguments::Dict{String, Any})
                 push!(args, arguments[key])
             end
         end
-        tool.func(args...)
+        # Bind declared keyword arguments (params after `;`) from the parsed args.
+        kwargs = Pair{Symbol, Any}[]
+        for kwname in Base.kwarg_decl(m)
+            # Skip the kwarg splat (e.g. `kwargs...` shows up as `kwargs`).
+            key = String(kwname)
+            if haskey(arguments, key)
+                push!(kwargs, kwname => arguments[key])
+            end
+        end
+        isempty(kwargs) ? tool.func(args...) : tool.func(args...; kwargs...)
     catch e
         tool.invocation_exception_count += 1
         if tool.max_invocation_exceptions !== nothing &&

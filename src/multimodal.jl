@@ -80,7 +80,7 @@ When given a path, auto-detects MIME type and reads/encodes the file.
 """
 function image_content(data::Vector{UInt8}; media_type::String="image/png")::Content
     encoded = base64encode(data)
-    Content(type=DATA, text=encoded, media_type=media_type,
+    Content(type=DATA, uri="data:$(media_type);base64,$(encoded)", media_type=media_type,
         additional_properties=Dict{String, Any}("content_category" => "image"))
 end
 
@@ -115,7 +115,7 @@ Create an audio content item from raw bytes or a file path.
 """
 function audio_content(data::Vector{UInt8}; media_type::String="audio/wav")::Content
     encoded = base64encode(data)
-    Content(type=DATA, text=encoded, media_type=media_type,
+    Content(type=DATA, uri="data:$(media_type);base64,$(encoded)", media_type=media_type,
         additional_properties=Dict{String, Any}("content_category" => "audio"))
 end
 
@@ -140,7 +140,7 @@ function file_content(data::Vector{UInt8};
     encoded = base64encode(data)
     props = Dict{String, Any}("content_category" => "file")
     filename !== nothing && (props["filename"] = filename)
-    Content(type=DATA, text=encoded, media_type=media_type, additional_properties=props)
+    Content(type=DATA, uri="data:$(media_type);base64,$(encoded)", media_type=media_type, additional_properties=props)
 end
 
 function file_content(path::AbstractString)::Content
@@ -175,8 +175,9 @@ function content_to_openai_multimodal(content::Content)::Dict{String, Any}
         return Dict{String, Any}("type" => "image_url", "image_url" => img_url)
     elseif content.type == DATA && content.media_type !== nothing
         category = get(content.additional_properties, "content_category", "")
+        # Binary data is stored as a data-URI in `uri`.
+        data_url = something(content.uri, "")
         if category == "image" || is_image_mime(content.media_type)
-            data_url = "data:$(content.media_type);base64,$(content.text)"
             return Dict{String, Any}(
                 "type" => "image_url",
                 "image_url" => Dict{String, Any}("url" => data_url),
@@ -185,7 +186,7 @@ function content_to_openai_multimodal(content::Content)::Dict{String, Any}
             return Dict{String, Any}(
                 "type" => "input_audio",
                 "input_audio" => Dict{String, Any}(
-                    "data" => content.text,
+                    "data" => _base64_from_data_uri(data_url),
                     "format" => _audio_format_from_mime(content.media_type),
                 ),
             )
@@ -193,6 +194,18 @@ function content_to_openai_multimodal(content::Content)::Dict{String, Any}
     end
     # Fallback: text representation
     return Dict{String, Any}("type" => "text", "text" => something(content.text, string(content)))
+end
+
+"""
+    _base64_from_data_uri(uri::AbstractString) -> String
+
+Extract the raw base64 payload from a `data:<media>;base64,<payload>` URI.
+Returns the input unchanged if it is not a base64 data-URI.
+"""
+function _base64_from_data_uri(uri::AbstractString)::String
+    idx = findfirst("base64,", uri)
+    idx === nothing && return String(uri)
+    return String(uri[(last(idx) + 1):end])
 end
 
 function _audio_format_from_mime(mime::String)::String

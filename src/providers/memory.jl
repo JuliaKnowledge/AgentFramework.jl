@@ -24,6 +24,36 @@ function _deserialize_message(json::AbstractString)::Message
     return message_from_dict(d)
 end
 
+"""
+    _history_before_run!(provider, session, ctx)
+
+Load stored history for `session` and merge it into `ctx`. Shared `before_run!`
+body for the history providers in this file.
+"""
+function _history_before_run!(provider, session::AgentSession, ctx::SessionContext)
+    history = get_messages(provider, session.id)
+    if !isempty(history)
+        extend_messages!(ctx, provider.source_id, history)
+    end
+end
+
+"""
+    _history_after_run!(provider, session, ctx)
+
+Persist the run's input and response messages for `session`. Shared `after_run!`
+body for the history providers in this file.
+"""
+function _history_after_run!(provider, session::AgentSession, ctx::SessionContext)
+    to_save = Message[]
+    append!(to_save, ctx.input_messages)
+    if ctx.response !== nothing && hasproperty(ctx.response, :messages)
+        append!(to_save, ctx.response.messages)
+    end
+    if !isempty(to_save)
+        save_messages!(provider, session.id, to_save)
+    end
+end
+
 # ── DBInterfaceHistoryProvider ───────────────────────────────────────────────
 
 """
@@ -66,16 +96,7 @@ Uses `DBInterface.execute` from the caller's loaded DBInterface module.
 function _ensure_table!(provider::DBInterfaceHistoryProvider)
     provider._table_created && return
     if provider.auto_create_table
-        sql = """
-        CREATE TABLE IF NOT EXISTS $(provider.table_name) (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            session_id TEXT NOT NULL,
-            role TEXT NOT NULL,
-            content TEXT NOT NULL,
-            created_at TEXT NOT NULL
-        )
-        """
-        _db_execute(provider.conn, sql)
+        _db_execute(provider.conn, get_create_table_sql(provider))
         # Create index separately (INDEX inside CREATE TABLE is not standard SQL)
         idx_sql = """
         CREATE INDEX IF NOT EXISTS idx_$(provider.table_name)_session
@@ -144,21 +165,11 @@ function save_messages!(provider::DBInterfaceHistoryProvider, session_id::String
 end
 
 function before_run!(provider::DBInterfaceHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
-    history = get_messages(provider, session.id)
-    if !isempty(history)
-        extend_messages!(ctx, provider.source_id, history)
-    end
+    _history_before_run!(provider, session, ctx)
 end
 
 function after_run!(provider::DBInterfaceHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
-    to_save = Message[]
-    append!(to_save, ctx.input_messages)
-    if ctx.response !== nothing && hasproperty(ctx.response, :messages)
-        append!(to_save, ctx.response.messages)
-    end
-    if !isempty(to_save)
-        save_messages!(provider, session.id, to_save)
-    end
+    _history_after_run!(provider, session, ctx)
 end
 
 function Base.show(io::IO, p::DBInterfaceHistoryProvider)
@@ -250,21 +261,11 @@ function save_messages!(provider::RedisHistoryProvider, session_id::String, mess
 end
 
 function before_run!(provider::RedisHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
-    history = get_messages(provider, session.id)
-    if !isempty(history)
-        extend_messages!(ctx, provider.source_id, history)
-    end
+    _history_before_run!(provider, session, ctx)
 end
 
 function after_run!(provider::RedisHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
-    to_save = Message[]
-    append!(to_save, ctx.input_messages)
-    if ctx.response !== nothing && hasproperty(ctx.response, :messages)
-        append!(to_save, ctx.response.messages)
-    end
-    if !isempty(to_save)
-        save_messages!(provider, session.id, to_save)
-    end
+    _history_after_run!(provider, session, ctx)
 end
 
 function Base.show(io::IO, p::RedisHistoryProvider)
@@ -343,21 +344,11 @@ function save_messages!(provider::FileHistoryProvider, session_id::String, messa
 end
 
 function before_run!(provider::FileHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
-    history = get_messages(provider, session.id)
-    if !isempty(history)
-        extend_messages!(ctx, provider.source_id, history)
-    end
+    _history_before_run!(provider, session, ctx)
 end
 
 function after_run!(provider::FileHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
-    to_save = Message[]
-    append!(to_save, ctx.input_messages)
-    if ctx.response !== nothing && hasproperty(ctx.response, :messages)
-        append!(to_save, ctx.response.messages)
-    end
-    if !isempty(to_save)
-        save_messages!(provider, session.id, to_save)
-    end
+    _history_after_run!(provider, session, ctx)
 end
 
 function Base.show(io::IO, p::FileHistoryProvider)

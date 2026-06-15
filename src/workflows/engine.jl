@@ -18,6 +18,8 @@ within a superstep, messages are delivered at superstep boundaries.
 - `state::Dict{String, Any}`: Shared workflow state.
 - `_running::Bool`: Whether the workflow is currently executing (prevents concurrent runs).
 - `_lock::ReentrantLock`: Lock guarding the `_running` flag.
+- `_state_lock::ReentrantLock`: Lock guarding all reads/writes of the shared `state` dict
+   (and any nested buffers) so concurrently-scheduled handlers in a superstep do not race.
 
 # Example
 ```julia
@@ -42,6 +44,7 @@ Base.@kwdef mutable struct Workflow
     graph_signature_hash::String = ""
     _running::Bool = false
     _lock::ReentrantLock = ReentrantLock()
+    _state_lock::ReentrantLock = ReentrantLock()
 end
 
 function Base.show(io::IO, w::Workflow)
@@ -319,7 +322,7 @@ function _execute_workflow(
 
                     try
                         for msg in messages
-                            ctx = execute_handler(spec, msg.data, [msg.source_id], workflow.state)
+                            ctx = execute_handler(spec, msg.data, [msg.source_id], workflow.state, workflow._state_lock)
                             append!(local_events, ctx._events)
                             append!(local_requests, ctx._request_infos)
                             if !isempty(ctx._sent_messages)
@@ -386,15 +389,20 @@ function _execute_workflow(
             WF_IDLE
         end
 
+        # Non-convergence: hit the iteration ceiling while messages are still queued.
+        # Match Python, which raises a convergence error rather than silently going idle.
         if iteration >= workflow.max_iterations && !isempty(message_queue)
-            @warn "Workflow reached max iterations ($iteration)"
+            throw(WorkflowConvergenceError(
+                "Workflow '$(workflow.name)' did not converge within max_iterations=$(workflow.max_iterations); " *
+                "$(sum(length, values(message_queue))) message(s) still queued for delivery"
+            ))
         end
 
         push!(events, event_status(final_state))
         return WorkflowRunResult(events=events, state=final_state)
 
     catch e
-        if e isa WorkflowCheckpointError
+        if e isa WorkflowCheckpointError || e isa WorkflowConvergenceError
             rethrow()
         end
         details = WorkflowErrorDetails(
@@ -436,6 +444,18 @@ end
 
 # ── Internal Routing ─────────────────────────────────────────────────────────
 
+"""
+Check whether `target_id`'s executor can handle a message carrying `data`.
+Mirrors Python's `_can_handle`: messages whose runtime type is incompatible with
+the target's declared `input_types` are dropped rather than delivered.
+Unknown targets are treated as non-handling (caller decides whether to warn).
+"""
+function _target_can_handle(workflow::Workflow, target_id::String, data)::Bool
+    spec = get(workflow.executors, target_id, nothing)
+    spec === nothing && return false
+    return can_handle(spec, typeof(data))
+end
+
 """Route messages from an executor through the workflow's edge groups."""
 function _route_messages!(
     queue::Dict{String, Vector{WorkflowMessage}},
@@ -454,8 +474,9 @@ function _route_messages!(
         end
     end
 
-    # Route targeted messages directly (exactly once)
+    # Route targeted messages directly (exactly once), dropping type-incompatible ones
     for msg in targeted
+        _target_can_handle(workflow, msg.target_id, msg.data) || continue
         target_msgs = get!(queue, msg.target_id, WorkflowMessage[])
         push!(target_msgs, msg)
     end
@@ -465,12 +486,16 @@ function _route_messages!(
         for group in workflow.edge_groups
             if source_executor_id in source_executor_ids(group)
                 if group.kind == FAN_IN_EDGE
+                    # Fan-in delivers an aggregated Vector payload to the target; type
+                    # gating against the (scalar) element type would wrongly drop it, so
+                    # routing/handling is decided by the fan-in accumulator, not here.
                     _accumulate_fan_in!(queue, workflow, group, source_executor_id, untargeted)
                 else
                     routed = route_messages(group, untargeted)
                     for (target_id, payloads) in routed
-                        target_msgs = get!(queue, target_id, WorkflowMessage[])
                         for data in payloads
+                            _target_can_handle(workflow, target_id, data) || continue
+                            target_msgs = get!(queue, target_id, WorkflowMessage[])
                             push!(target_msgs, WorkflowMessage(data=data, source_id=source_executor_id))
                         end
                     end
@@ -509,10 +534,10 @@ function _accumulate_fan_in!(
             end
         end
 
+        # Deliver ONE aggregated message whose payload is the Vector of all items,
+        # so the target handler executes exactly once (matching Python's FanInEdgeRunner).
         target_msgs = get!(queue, target_id, WorkflowMessage[])
-        for data in aggregated
-            push!(target_msgs, WorkflowMessage(data=data, source_id="__fan_in__"))
-        end
+        push!(target_msgs, WorkflowMessage(data=aggregated, source_id="__fan_in__"))
 
         # Clear buffers after delivery
         for (_, v) in group_buf

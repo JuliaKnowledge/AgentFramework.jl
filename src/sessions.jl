@@ -27,12 +27,17 @@ end
 
 """
     session_to_dict(session::AgentSession) -> Dict{String, Any}
+
+Serialize a session to a plain dictionary. `state` and `metadata` are passed
+through `_serialize_any_value`, so typed nested values (e.g. `Message`s stored in
+state) round-trip via [`session_from_dict`](@ref) — consistent with
+`serialize_to_dict(::AgentSession)`.
 """
 function session_to_dict(session::AgentSession)::Dict{String, Any}
     d = Dict{String, Any}(
         "id" => session.id,
-        "state" => session.state,
-        "metadata" => session.metadata,
+        "state" => _serialize_any_value(session.state),
+        "metadata" => _serialize_any_value(session.metadata),
     )
     session.user_id !== nothing && (d["user_id"] = session.user_id)
     session.thread_id !== nothing && (d["thread_id"] = session.thread_id)
@@ -41,14 +46,21 @@ end
 
 """
     session_from_dict(d::Dict{String, Any}) -> AgentSession
+
+Inverse of [`session_to_dict`](@ref); `state`/`metadata` are run through
+`_deserialize_any_value` to restore typed nested values.
 """
 function session_from_dict(d::Dict{String, Any})::AgentSession
+    raw_state = get(d, "state", Dict{String, Any}())
+    raw_meta = get(d, "metadata", Dict{String, Any}())
+    state = raw_state === nothing ? Dict{String, Any}() : _deserialize_any_value(raw_state)
+    meta = raw_meta === nothing ? Dict{String, Any}() : _deserialize_any_value(raw_meta)
     AgentSession(
         id = get(d, "id", string(UUIDs.uuid4())),
-        state = get(d, "state", Dict{String, Any}()),
+        state = state isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(state)) : Dict{String, Any}(),
         user_id = get(d, "user_id", nothing),
         thread_id = get(d, "thread_id", nothing),
-        metadata = get(d, "metadata", Dict{String, Any}()),
+        metadata = meta isa AbstractDict ? Dict{String, Any}(string(k) => v for (k, v) in pairs(meta)) : Dict{String, Any}(),
     )
 end
 
@@ -108,9 +120,7 @@ end
 
 function extend_messages!(ctx::SessionContext, source, messages::Vector{Message})
     source_id, attribution = _resolve_context_source(source)
-    if !haskey(ctx.context_messages, source_id)
-        ctx.context_messages[source_id] = Message[]
-    end
+    bucket = get!(ctx.context_messages, source_id, Message[])
 
     copied = Message[]
     for message in messages
@@ -128,7 +138,7 @@ function extend_messages!(ctx::SessionContext, source, messages::Vector{Message}
         push!(copied, msg_copy)
     end
 
-    append!(ctx.context_messages[source_id], copied)
+    append!(bucket, copied)
 end
 
 """
@@ -243,10 +253,7 @@ function get_messages(provider::InMemoryHistoryProvider, session_id::String)::Ve
 end
 
 function save_messages!(provider::InMemoryHistoryProvider, session_id::String, messages::Vector{Message})
-    if !haskey(provider.store, session_id)
-        provider.store[session_id] = Message[]
-    end
-    append!(provider.store[session_id], messages)
+    append!(get!(provider.store, session_id, Message[]), messages)
 end
 
 function before_run!(provider::InMemoryHistoryProvider, agent, session::AgentSession, ctx::SessionContext, state::Dict{String, Any})
@@ -402,7 +409,7 @@ function (mw::PerServiceCallHistoryMiddleware)(ctx, call_next::Function)
     end
 
     # Execute the actual LLM call
-    call_next()
+    call_next(ctx)
 
     # Persist messages after the service call
     if ctx.result !== nothing && hasproperty(ctx.result, :messages)

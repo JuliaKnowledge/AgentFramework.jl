@@ -213,7 +213,7 @@ using Logging
         @test isempty(filter(i -> i.severity == :error, result.issues))
     end
 
-    @testset "Integration with build() — warnings are emitted" begin
+    @testset "Integration with build() — type errors abort the build" begin
         a = make_spec("a"; output = DataType[String])
         b = make_spec("b"; input = DataType[Int], yield_types = DataType[Int])
 
@@ -222,24 +222,24 @@ using Logging
         add_edge(builder, "a", "b")
         add_output(builder, "b")
 
-        logs, wf = Test.collect_test_logs() do
+        # A type-incompatible edge is an :error-severity issue, so build() now raises
+        # (matches Python's WorkflowBuilder.build()).
+        err = try
             build(builder; validate_types = true)
+            nothing
+        catch e
+            e
         end
+        @test err isa WorkflowError
+        @test occursin("Incompatible", sprint(showerror, err))
 
-        @test wf isa Workflow
-        # Should have type compatibility error logged as a warning
-        @test any(l -> l.level == Logging.Warn && occursin("Incompatible", l.message), logs)
-
-        # Build with validation disabled — no warnings
+        # Build with validation disabled — succeeds without raising
         builder2 = WorkflowBuilder(name = "NoVal", start = a)
         add_executor(builder2, b)
         add_edge(builder2, "a", "b")
         add_output(builder2, "b")
 
-        logs2, wf2 = Test.collect_test_logs() do
-            build(builder2; validate_types = false)
-        end
-        @test isempty(logs2)
+        wf2 = build(builder2; validate_types = false)
         @test wf2 isa Workflow
     end
 

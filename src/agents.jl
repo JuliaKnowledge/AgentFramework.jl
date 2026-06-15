@@ -1,7 +1,7 @@
 # Agent implementation for AgentFramework.jl
 # Mirrors Python Agent with middleware, tools, context providers, and tool execution loop.
 
-const DEFAULT_MAX_TOOL_ITERATIONS = 10
+const DEFAULT_MAX_TOOL_ITERATIONS = 40
 const _SESSION_ID_OPTION_KEY = "_agentframework_session_id"
 const _THREAD_ID_OPTION_KEY = "_agentframework_thread_id"
 const _INPUT_MESSAGES_OPTION_KEY = "_agentframework_input_messages"
@@ -425,7 +425,10 @@ function _execute_agent_run_streaming(
                 finish_reason = STOP,
             )
             try; put!(channel, term_update); catch; end
-            return
+            return AgentResponse(
+                messages = [Message(role=:assistant, contents=[text_content(term_text)])],
+                finish_reason = STOP,
+            )
         end
 
         # Collect updates and forward to caller
@@ -568,15 +571,6 @@ function _execute_tool_calls(
             continue
         end
 
-        # Build invocation context for function middleware
-        parsed_args = tc.arguments !== nothing ? JSON3.read(tc.arguments, Dict{String, Any}) : Dict{String, Any}()
-
-        func_ctx = FunctionInvocationContext(
-            tool = tool,
-            arguments = parsed_args,
-            call_id = something(tc.call_id, ""),
-        )
-
         function func_handler(fctx::FunctionInvocationContext)
             try
                 result = invoke_tool(fctx.tool, fctx.arguments)
@@ -589,6 +583,16 @@ function _execute_tool_calls(
         end
 
         try
+            # Parse arguments inside the try so a malformed/empty JSON payload
+            # yields a function_result error for this call instead of crashing the run.
+            parsed_args = something(parse_arguments(tc), Dict{String, Any}())
+
+            func_ctx = FunctionInvocationContext(
+                tool = tool,
+                arguments = parsed_args,
+                call_id = something(tc.call_id, ""),
+            )
+
             result = apply_function_middleware(agent.function_middlewares, func_ctx, func_handler)
             result_str = result isa AbstractString ? result : JSON3.write(result)
             push!(results, function_result_content(
@@ -749,7 +753,9 @@ function as_tool(agent::Agent;
     else
         "Run the $(agent.name) agent with the given input message."
     end
-    tool_name = replace(lowercase(agent.name), r"[^a-z0-9_]" => "_")
+    sanitized = replace(lowercase(agent.name), r"[^a-z0-9_]" => "_")
+    # Guard against an empty/all-symbol agent name producing an invalid tool name.
+    tool_name = isempty(strip(sanitized, '_')) ? "agent" : sanitized
 
     func = (input::String) -> begin
         session = propagate_session ? nothing : AgentSession()

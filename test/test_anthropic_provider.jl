@@ -9,7 +9,7 @@ end
 
     @testset "AnthropicChatClient defaults" begin
         client = AnthropicChatClient(api_key="sk-ant-test")
-        @test client.model == "claude-sonnet-4-20250514"
+        @test client.model == "claude-sonnet-4-6"
         @test client.base_url == "https://api.anthropic.com"
         @test client.api_key == "sk-ant-test"
         @test client.api_version == "2023-06-01"
@@ -35,7 +35,7 @@ end
 
     @testset "AnthropicChatClient show method" begin
         client = AnthropicChatClient(api_key="sk-test")
-        @test sprint(show, client) == "AnthropicChatClient(\"claude-sonnet-4-20250514\")"
+        @test sprint(show, client) == "AnthropicChatClient(\"claude-sonnet-4-6\")"
         client2 = AnthropicChatClient(model="claude-haiku-3-20240307", api_key="sk-test")
         @test sprint(show, client2) == "AnthropicChatClient(\"claude-haiku-3-20240307\")"
     end
@@ -237,12 +237,12 @@ end
     # ── Request Body Construction ────────────────────────────────────────────
 
     @testset "_build_anthropic_request includes system, model, max_tokens" begin
-        client = AnthropicChatClient(api_key="sk-test", model="claude-sonnet-4-20250514")
+        client = AnthropicChatClient(api_key="sk-test", model="claude-sonnet-4-6")
         api_messages = [Dict{String, Any}("role" => "user", "content" => [Dict{String, Any}("type" => "text", "text" => "Hello")])]
         opts = ChatOptions(max_tokens=2048, temperature=0.7)
 
         body = AgentFramework._build_anthropic_request(client, api_messages, "Be helpful", opts)
-        @test body["model"] == "claude-sonnet-4-20250514"
+        @test body["model"] == "claude-sonnet-4-6"
         @test body["max_tokens"] == 2048
         @test body["system"] == "Be helpful"
         @test body["temperature"] == 0.7
@@ -276,7 +276,7 @@ end
     end
 
     @testset "_build_anthropic_request respects model override" begin
-        client = AnthropicChatClient(api_key="sk-test", model="claude-sonnet-4-20250514")
+        client = AnthropicChatClient(api_key="sk-test", model="claude-sonnet-4-6")
         api_messages = [Dict{String, Any}("role" => "user", "content" => [])]
         opts = ChatOptions(model="claude-haiku-3-20240307")
 
@@ -315,7 +315,7 @@ end
             "content" => [
                 Dict{String, Any}("type" => "text", "text" => "Hello! How can I help?"),
             ],
-            "model" => "claude-sonnet-4-20250514",
+            "model" => "claude-sonnet-4-6",
             "stop_reason" => "end_turn",
             "usage" => Dict{String, Any}("input_tokens" => 10, "output_tokens" => 15),
         )
@@ -324,7 +324,7 @@ end
         @test resp.messages[1].role == :assistant
         @test get_text(resp) == "Hello! How can I help?"
         @test resp.finish_reason == STOP
-        @test resp.model_id == "claude-sonnet-4-20250514"
+        @test resp.model_id == "claude-sonnet-4-6"
         @test resp.response_id == "msg_test123"
     end
 
@@ -342,7 +342,7 @@ end
                     "input" => Dict{String, Any}("city" => "London"),
                 ),
             ],
-            "model" => "claude-sonnet-4-20250514",
+            "model" => "claude-sonnet-4-6",
             "stop_reason" => "tool_use",
             "usage" => Dict{String, Any}("input_tokens" => 20, "output_tokens" => 30),
         )

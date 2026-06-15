@@ -70,6 +70,7 @@ function _mem0_search_body(
             "query" => String(query),
             "filters" => filters,
             "top_k" => top_k,
+            "output_format" => "v1.1",
         )
     else
         body = Dict{String, Any}("query" => String(query), "top_k" => top_k)
@@ -162,8 +163,13 @@ function _mem0_store_body(
     scope.user_id !== nothing && (body["user_id"] = scope.user_id)
     scope.agent_id !== nothing && (body["agent_id"] = scope.agent_id)
 
-    if scope.application_id !== nothing
-        body["metadata"] = Dict{String, Any}("application_id" => scope.application_id)
+    # Python's provider always passes metadata={"application_id": ...} (even when
+    # application_id is None); align by always including the metadata key.
+    body["metadata"] = Dict{String, Any}("application_id" => scope.application_id)
+
+    # The Python mem0 client forces v1.1 output format on every platform add.
+    if provider.client.deployment == MEM0_PLATFORM
+        body["output_format"] = "v1.1"
     end
 
     return body

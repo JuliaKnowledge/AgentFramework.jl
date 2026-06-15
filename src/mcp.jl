@@ -233,9 +233,9 @@ function _send_notification(client::StdioMCPClient, method::String, params::Dict
 end
 
 function connect!(client::StdioMCPClient)
-    cmd = Cmd(`$(client.command) $(client.args)`)
+    cmd = `$(client.command) $(client.args)`
     if !isempty(client.env)
-        cmd = addenv(cmd, client.env...)
+        cmd = addenv(cmd, client.env)
     end
 
     client._process = open(cmd, "r+")
@@ -451,10 +451,31 @@ function mcp_tool_to_function_tool(client::AbstractMCPClient, tool::MCPToolInfo;
             error_msg = isempty(content_texts) ? "MCP tool error" : join(content_texts, "\n")
             throw(ToolExecutionError(error_msg))
         end
-        # Try text content first
-        texts = [get(c, "text", "") for c in result.content if get(c, "type", "") == "text"]
-        if !isempty(texts)
-            return join(texts, "\n")
+        # Collect all returnable content blocks: text, image/audio (as data-URIs),
+        # and embedded resources (text or uri). Mirrors Python's _parse_content_from_mcp,
+        # which handles more than just text blocks.
+        parts = String[]
+        for c in result.content
+            t = get(c, "type", "")
+            if t == "text"
+                push!(parts, get(c, "text", ""))
+            elseif t == "image" || t == "audio"
+                data = get(c, "data", nothing)
+                if data !== nothing
+                    mime = get(c, "mimeType", t == "image" ? "image/png" : "audio/wav")
+                    push!(parts, "data:$(mime);base64,$(data)")
+                end
+            elseif t == "resource"
+                res = get(c, "resource", Dict{String, Any}())
+                if res isa AbstractDict && haskey(res, "text")
+                    push!(parts, string(res["text"]))
+                elseif res isa AbstractDict && haskey(res, "uri")
+                    push!(parts, string(res["uri"]))
+                end
+            end
+        end
+        if !isempty(parts)
+            return join(parts, "\n")
         end
         # Fallback to structuredContent if present
         for c in result.content
